@@ -1,0 +1,47 @@
+spring:
+  # Database Configuration - Production
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 10
+      idle-timeout: 300000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+
+  # JPA Configuration - Production
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  # Redis Configuration - Production
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+
+  # Flyway Configuration - Production
+  flyway:
+    clean-disabled: true
+
+# Logging Configuration - Production
+logging:
+  level:
+    root: WARN
+    com.fyna: INFO
+    org.springframework.security: WARN
+    org.flywaydb: INFO
+
+# Server Configuration - Production
+server:
+  error:
+    include-message: never
+    include-stacktrace: never

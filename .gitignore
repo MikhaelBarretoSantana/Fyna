@@ -1,0 +1,150 @@
+# ============================================
+# Fyna — .gitignore (monorepo Flutter + Spring + Python)
+# ============================================
+
+# ──────────────────────── Secrets ────────────────────────
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+secrets/
+
+# ──────────────────────── OS ────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# ──────────────────────── IDE / Editor ────────────────────────
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+*.code-workspace
+.project
+.classpath
+.settings/
+.factorypath
+
+# ──────────────────────── Logs ────────────────────────
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# ============================================
+# FLUTTER (apps/mobile)
+# ============================================
+apps/mobile/.dart_tool/
+apps/mobile/.flutter-plugins
+apps/mobile/.flutter-plugins-dependencies
+apps/mobile/.metadata
+apps/mobile/.packages
+apps/mobile/.pub-cache/
+apps/mobile/.pub/
+apps/mobile/build/
+apps/mobile/coverage/
+# pubspec.lock é COMMITADO em apps (reproducibilidade)
+
+# Flutter — geração de código (mocks, etc)
+apps/mobile/**/*.g.dart
+apps/mobile/**/*.freezed.dart
+apps/mobile/**/*.mocks.dart
+
+# Flutter — Android
+apps/mobile/android/.gradle/
+apps/mobile/android/captures/
+apps/mobile/android/gradlew
+apps/mobile/android/gradlew.bat
+apps/mobile/android/local.properties
+apps/mobile/android/**/GeneratedPluginRegistrant.java
+apps/mobile/android/key.properties
+apps/mobile/android/**/*.keystore
+apps/mobile/android/**/*.jks
+apps/mobile/android/app/release/
+apps/mobile/android/app/debug/
+
+# Flutter — iOS
+apps/mobile/ios/**/dgph
+apps/mobile/ios/**/.DS_Store
+apps/mobile/ios/Flutter/App.framework
+apps/mobile/ios/Flutter/Flutter.framework
+apps/mobile/ios/Flutter/Flutter.podspec
+apps/mobile/ios/Flutter/Generated.xcconfig
+apps/mobile/ios/Flutter/ephemeral/
+apps/mobile/ios/Flutter/app.flx
+apps/mobile/ios/Flutter/app.zip
+apps/mobile/ios/Flutter/flutter_assets/
+apps/mobile/ios/Flutter/flutter_export_environment.sh
+apps/mobile/ios/ServiceDefinitions.json
+apps/mobile/ios/Runner/GeneratedPluginRegistrant.*
+apps/mobile/ios/Pods/
+apps/mobile/ios/.symlinks/
+
+# Flutter — Web
+apps/mobile/lib/generated_plugin_registrant.dart
+
+# Flutter — Linux / macOS / Windows desktop
+apps/mobile/linux/flutter/ephemeral/
+apps/mobile/macos/Flutter/ephemeral/
+apps/mobile/windows/flutter/ephemeral/
+
+# ============================================
+# SPRING BOOT / GRADLE (apps/backend)
+# ============================================
+apps/backend/.gradle/
+apps/backend/build/
+apps/backend/bin/
+apps/backend/out/
+apps/backend/.classpath
+apps/backend/.project
+apps/backend/.settings/
+apps/backend/.springBeans
+apps/backend/.sts4-cache
+apps/backend/HELP.md
+
+# Spring Boot — logs e dumps
+apps/backend/logs/
+apps/backend/*.log
+apps/backend/hs_err_pid*
+
+# ============================================
+# PYTHON (apps/ai)
+# ============================================
+apps/ai/__pycache__/
+apps/ai/**/__pycache__/
+apps/ai/*.py[cod]
+apps/ai/*$py.class
+apps/ai/*.so
+apps/ai/.Python
+apps/ai/.venv/
+apps/ai/venv/
+apps/ai/env/
+apps/ai/ENV/
+apps/ai/.pytest_cache/
+apps/ai/.mypy_cache/
+apps/ai/.ruff_cache/
+apps/ai/.coverage
+apps/ai/htmlcov/
+apps/ai/.tox/
+apps/ai/*.egg-info/
+apps/ai/dist/
+apps/ai/build/
+apps/ai/pip-log.txt
+apps/ai/pip-delete-this-directory.txt
+
+# Python — modelos baixados (sentence-transformers etc)
+apps/ai/.cache/
+apps/ai/models/
+apps/ai/.sentence_transformers/
+
+# ============================================
+# DOCKER
+# ============================================
+postgres_data/
+*.db
+*.sqlite
+*.sqlite3

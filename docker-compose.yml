@@ -1,0 +1,41 @@
+services:
+
+  # ── Python AI Microservice ───────────────────────────────────
+  fyna-ai:
+    build:
+      context: ./apps/ai
+      dockerfile: Dockerfile
+    container_name: fyna-ai-engine
+    ports:
+      - "${FYNA_AI_PORT:-8081}:8081"
+    environment:
+      FYNA_AI_DATABASE_URL: postgresql://${DB_USERNAME}:${DB_PASSWORD}@host.docker.internal:${DB_PORT:-5432}/${DB_NAME}
+      FYNA_AI_INTERNAL_API_KEY: ${FYNA_INTERNAL_KEY}
+      FYNA_AI_DEBUG: "${FYNA_AI_DEBUG:-true}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  # ── Spring Boot Backend ──────────────────────────────────────
+  fyna-back:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    container_name: fyna-backend
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DB_HOST: host.docker.internal
+      DB_PORT: ${DB_PORT:-5432}
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      FYNA_AI_ENGINE_URL: http://fyna-ai:8081
+      FYNA_AI_INTERNAL_KEY: ${FYNA_INTERNAL_KEY}
+      FYNA_CORS_ORIGINS: ${FYNA_CORS_ORIGINS}
+      JWT_SECRET: ${JWT_SECRET}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      fyna-ai:
+        condition: service_started

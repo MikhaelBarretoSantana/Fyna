@@ -1,0 +1,36 @@
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
+
+abstract class AppEnv {
+  /// URL do ngrok para testes em dispositivo físico.
+  /// Deixe null para usar localhost/emulador.
+  static const String? _ngrokUrl = 'https://2084-45-65-201-225.ngrok-free.app';
+
+  static const String _basePath = '/api/v1';
+
+  static String get apiBaseUrl {
+    // Dispositivo físico (Android/iOS real) usa ngrok se configurado
+    if (!kIsWeb && _ngrokUrl != null) {
+      final isPhysicalDevice = defaultTargetPlatform == TargetPlatform.android ||
+          defaultTargetPlatform == TargetPlatform.iOS;
+      if (isPhysicalDevice) {
+        return '$_ngrokUrl$_basePath';
+      }
+    }
+
+    const port = '8080';
+
+    if (kIsWeb) {
+      return 'http://localhost:$port$_basePath';
+    }
+
+    if (defaultTargetPlatform == TargetPlatform.android) {
+      // Emulador Android usa 10.0.2.2 para acessar o host
+      return 'http://10.0.2.2:$port$_basePath';
+    }
+
+    return 'http://localhost:$port$_basePath';
+  }
+
+  static const int connectTimeout = 15000;
+  static const int receiveTimeout = 15000;
+}
