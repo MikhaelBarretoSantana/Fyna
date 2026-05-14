@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.UUID;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -12,7 +14,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fyna.Fyna.core.exception.ResourceNotFoundException;
 import com.fyna.Fyna.core.features.accounts.data.repository.AccountRepository;
 import com.fyna.Fyna.core.features.ai.infrastructure.AIEngineClient;
+import com.fyna.Fyna.core.features.auth.data.repository.UserRepository;
+import com.fyna.Fyna.core.features.budgets.domain.service.BudgetService;
 import com.fyna.Fyna.core.features.categories.data.repository.CategoryRepository;
+import com.fyna.Fyna.core.features.notifications.domain.service.NotificationService;
 import com.fyna.Fyna.core.features.transactions.data.repository.TransactionRepository;
 import com.fyna.Fyna.core.features.transactions.presentation.dto.CreateTransactionRequest;
 import com.fyna.Fyna.core.features.transactions.presentation.dto.TransactionResponse;
@@ -22,25 +27,41 @@ import com.fyna.Fyna.core.shared.domain.Categories;
 import com.fyna.Fyna.core.shared.domain.Transactions;
 import com.fyna.Fyna.core.shared.domain.User;
 import com.fyna.Fyna.core.shared.dto.PageResponse;
+import com.fyna.Fyna.core.shared.enums.NotificationType;
 import com.fyna.Fyna.core.shared.enums.TransactionsType;
-import com.fyna.Fyna.core.features.auth.data.repository.UserRepository;
 
 @Service
 public class TransactionService {
+
+    private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
+
+    /** Janela de histórico considerada para o cálculo de média da categoria. */
+    private static final int ANOMALY_WINDOW_DAYS = 90;
+
+    /** Mínimo de transações na janela para considerar o histórico estatisticamente útil. */
+    private static final long ANOMALY_MIN_HISTORY = 5;
+
+    /** Múltiplo da média acima do qual a transação é considerada anômala. */
+    private static final BigDecimal ANOMALY_MULTIPLIER = new BigDecimal("2.0");
 
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final AIEngineClient aiEngineClient;
+    private final BudgetService budgetService;
+    private final NotificationService notificationService;
 
     public TransactionService(TransactionRepository transactionRepository, AccountRepository accountRepository,
-            CategoryRepository categoryRepository, UserRepository userRepository, AIEngineClient aiEngineClient) {
+            CategoryRepository categoryRepository, UserRepository userRepository, AIEngineClient aiEngineClient,
+            BudgetService budgetService, NotificationService notificationService) {
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.categoryRepository = categoryRepository;
         this.userRepository = userRepository;
         this.aiEngineClient = aiEngineClient;
+        this.budgetService = budgetService;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -84,6 +105,25 @@ public class TransactionService {
         // Persiste a transação e atualiza saldo dentro de uma única transação ACID
         Transactions transaction = persistTransaction(userId, request);
 
+        // Pós-processamento (fora da transação principal). Falhas aqui não devem
+        // reverter o lançamento — só logamos e seguimos.
+        if (request.type() == TransactionsType.EXPENSE
+                && Boolean.TRUE.equals(transaction.getIsPaid())
+                && request.categoryId() != null) {
+            try {
+                budgetService.updateBudgetSpending(userId, request.categoryId(), request.amount());
+            } catch (Exception e) {
+                log.warn("Falha ao atualizar consumo de orçamento para tx {}: {}",
+                        transaction.getId(), e.getMessage());
+            }
+            try {
+                maybeFireSpendingAnomaly(userId, transaction);
+            } catch (Exception e) {
+                log.warn("Falha ao avaliar anomalia para tx {}: {}",
+                        transaction.getId(), e.getMessage());
+            }
+        }
+
         // Chama a IA APÓS o commit — fora da transação para evitar rollback cruzado
         if (request.categoryId() == null) {
             aiEngineClient.classifyTransaction(
@@ -96,6 +136,44 @@ public class TransactionService {
         }
 
         return TransactionResponse.from(transaction);
+    }
+
+    /**
+     * Detecta gasto atípico comparando a transação com a média histórica da mesma
+     * categoria nos últimos {@value #ANOMALY_WINDOW_DAYS} dias.
+     * Exige histórico mínimo ({@value #ANOMALY_MIN_HISTORY} transações) para evitar
+     * falsos positivos quando o usuário ainda tem poucos dados.
+     */
+    private void maybeFireSpendingAnomaly(UUID userId, Transactions tx) {
+        if (tx.getCategories() == null) return;
+        UUID categoryId = tx.getCategories().getId();
+        LocalDate end = tx.getTransactionDate();
+        LocalDate start = end.minusDays(ANOMALY_WINDOW_DAYS);
+
+        long count = transactionRepository
+                .countByUserIdAndCategoriesIdAndTypeAndTransactionDateBetween(
+                        userId, categoryId, TransactionsType.EXPENSE, start, end);
+        if (count < ANOMALY_MIN_HISTORY) return;
+
+        Double avg = transactionRepository.avgAmountByUserCategoryType(
+                userId, categoryId, TransactionsType.EXPENSE, start, end);
+        if (avg == null || avg <= 0) return;
+
+        BigDecimal threshold = BigDecimal.valueOf(avg).multiply(ANOMALY_MULTIPLIER);
+        if (tx.getAmount().compareTo(threshold) < 0) return;
+
+        String categoryName = tx.getCategories().getName();
+        String metadata = String.format(
+                "{\"transactionId\":\"%s\",\"categoryId\":\"%s\",\"amount\":\"%s\",\"avg\":\"%.2f\"}",
+                tx.getId(), categoryId, tx.getAmount().toPlainString(), avg);
+        notificationService.createNotification(
+                userId,
+                NotificationType.SPENDING_ANOMALY,
+                "Gasto atípico detectado",
+                String.format("Sua transação em \"%s\" está acima do padrão recente.", categoryName),
+                "/transactions/" + tx.getId(),
+                metadata
+        );
     }
 
     @Transactional

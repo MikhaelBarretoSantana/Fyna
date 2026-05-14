@@ -1,6 +1,7 @@
 package com.fyna.Fyna.core.features.goals.domain.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -14,20 +15,27 @@ import com.fyna.Fyna.core.features.goals.data.repository.FinancialGoalRepository
 import com.fyna.Fyna.core.features.goals.presentation.dto.CreateFinancialGoalRequest;
 import com.fyna.Fyna.core.features.goals.presentation.dto.FinancialGoalResponse;
 import com.fyna.Fyna.core.features.goals.presentation.dto.UpdateFinancialGoalRequest;
+import com.fyna.Fyna.core.features.notifications.domain.service.NotificationService;
 import com.fyna.Fyna.core.shared.domain.FinancialGoal;
 import com.fyna.Fyna.core.shared.domain.User;
 import com.fyna.Fyna.core.shared.enums.FinancialGoalPriority;
 import com.fyna.Fyna.core.shared.enums.FinancialGoalStatus;
+import com.fyna.Fyna.core.shared.enums.NotificationType;
 
 @Service
 public class FinancialGoalService {
 
+    private static final BigDecimal HUNDRED = new BigDecimal("100");
+
     private final FinancialGoalRepository financialGoalRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
-    public FinancialGoalService(FinancialGoalRepository financialGoalRepository, UserRepository userRepository) {
+    public FinancialGoalService(FinancialGoalRepository financialGoalRepository, UserRepository userRepository,
+            NotificationService notificationService) {
         this.financialGoalRepository = financialGoalRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +100,7 @@ public class FinancialGoalService {
                 goal.setStatus(FinancialGoalStatus.COMPLETED);
                 goal.setCompletedAt(Instant.now());
             }
+            maybeFireGoalMilestone(userId, goal);
         }
 
         if (request.status() != null) {
@@ -128,7 +137,54 @@ public class FinancialGoalService {
             goal.setCompletedAt(Instant.now());
         }
 
+        maybeFireGoalMilestone(userId, goal);
+
         goal = financialGoalRepository.save(goal);
         return FinancialGoalResponse.from(goal);
+    }
+
+    /**
+     * Dispara GOAL_PROGRESS em 50% / 75% e GOAL_COMPLETED em 100%.
+     * Idempotente: usa lastProgressMilestone para enviar 1 vez por marco.
+     */
+    private void maybeFireGoalMilestone(UUID userId, FinancialGoal goal) {
+        if (goal.getTargetAmount() == null || goal.getTargetAmount().signum() <= 0) return;
+
+        BigDecimal percentage = goal.getCurrentAmount()
+                .multiply(HUNDRED)
+                .divide(goal.getTargetAmount(), 2, RoundingMode.HALF_UP);
+
+        short lastMilestone = goal.getLastProgressMilestone() != null
+                ? goal.getLastProgressMilestone()
+                : (short) 0;
+        short newMilestone = 0;
+        if (percentage.compareTo(HUNDRED) >= 0) {
+            newMilestone = 100;
+        } else if (percentage.compareTo(new BigDecimal("75")) >= 0) {
+            newMilestone = 75;
+        } else if (percentage.compareTo(new BigDecimal("50")) >= 0) {
+            newMilestone = 50;
+        }
+        if (newMilestone <= lastMilestone) return;
+
+        NotificationType type = newMilestone == 100
+                ? NotificationType.GOAL_COMPLETED
+                : NotificationType.GOAL_PROGRESS;
+        String title = newMilestone == 100 ? "Meta atingida!" : "Progresso da meta";
+        String message = newMilestone == 100
+                ? String.format("Parabéns! Você concluiu a meta \"%s\".", goal.getName())
+                : String.format("Você atingiu %d%% da meta \"%s\".", newMilestone, goal.getName());
+
+        String metadata = String.format("{\"goalId\":\"%s\",\"milestone\":%d}",
+                goal.getId(), newMilestone);
+        notificationService.createNotification(
+                userId,
+                type,
+                title,
+                message,
+                "/goals/" + goal.getId(),
+                metadata
+        );
+        goal.setLastProgressMilestone(newMilestone);
     }
 }

@@ -74,6 +74,9 @@ public class FinancialGoal extends AbstractAuditingEntity<UUID> {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "last_progress_milestone", nullable = false)
+    private Short lastProgressMilestone = 0;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -195,6 +198,14 @@ public class FinancialGoal extends AbstractAuditingEntity<UUID> {
 
     public void setCompletedAt(Instant completedAt) {
         this.completedAt = completedAt;
+    }
+
+    public Short getLastProgressMilestone() {
+        return lastProgressMilestone;
+    }
+
+    public void setLastProgressMilestone(Short lastProgressMilestone) {
+        this.lastProgressMilestone = lastProgressMilestone;
     }
 
     public Instant getCreatedAt() {

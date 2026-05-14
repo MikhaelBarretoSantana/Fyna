@@ -71,6 +71,9 @@ public class Budget extends AbstractAuditingEntity<UUID> {
     @Column(name = "alert_enabled", nullable = false)
     private Boolean alertEnabled = true;
 
+    @Column(name = "last_alert_threshold", nullable = false, precision = 5, scale = 2)
+    private BigDecimal lastAlertThreshold = BigDecimal.ZERO;
+
     @Column(name = "is_active", nullable = false)
     private Boolean isActive = true;
 
@@ -187,6 +190,14 @@ public class Budget extends AbstractAuditingEntity<UUID> {
 
     public void setAlertEnabled(Boolean alertEnabled) {
         this.alertEnabled = alertEnabled;
+    }
+
+    public BigDecimal getLastAlertThreshold() {
+        return lastAlertThreshold;
+    }
+
+    public void setLastAlertThreshold(BigDecimal lastAlertThreshold) {
+        this.lastAlertThreshold = lastAlertThreshold;
     }
 
     public Boolean getIsActive() {

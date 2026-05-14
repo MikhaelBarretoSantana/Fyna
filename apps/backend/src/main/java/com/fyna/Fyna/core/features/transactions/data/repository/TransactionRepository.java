@@ -44,4 +44,17 @@ public interface TransactionRepository extends JpaRepository<Transactions, UUID>
             @Param("userId") UUID userId,
             @Param("startDate") LocalDate startDate,
             @Param("endDate") LocalDate endDate);
+
+    @Query("SELECT AVG(t.amount) FROM Transactions t " +
+            "WHERE t.user.id = :userId AND t.categories.id = :categoryId AND t.type = :type " +
+            "AND t.transactionDate BETWEEN :startDate AND :endDate")
+    Double avgAmountByUserCategoryType(
+            @Param("userId") UUID userId,
+            @Param("categoryId") UUID categoryId,
+            @Param("type") TransactionsType type,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    long countByUserIdAndCategoriesIdAndTypeAndTransactionDateBetween(
+            UUID userId, UUID categoryId, TransactionsType type, LocalDate startDate, LocalDate endDate);
 }

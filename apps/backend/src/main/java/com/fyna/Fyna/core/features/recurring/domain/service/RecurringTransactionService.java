@@ -11,6 +11,7 @@ import com.fyna.Fyna.core.exception.ResourceNotFoundException;
 import com.fyna.Fyna.core.features.accounts.data.repository.AccountRepository;
 import com.fyna.Fyna.core.features.auth.data.repository.UserRepository;
 import com.fyna.Fyna.core.features.categories.data.repository.CategoryRepository;
+import com.fyna.Fyna.core.features.notifications.domain.service.NotificationService;
 import com.fyna.Fyna.core.features.recurring.data.repository.RecurringTransactionRepository;
 import com.fyna.Fyna.core.features.recurring.presentation.dto.CreateRecurringTransactionRequest;
 import com.fyna.Fyna.core.features.recurring.presentation.dto.RecurringTransactionResponse;
@@ -21,6 +22,7 @@ import com.fyna.Fyna.core.shared.domain.Categories;
 import com.fyna.Fyna.core.shared.domain.RecurringTransactions;
 import com.fyna.Fyna.core.shared.domain.Transactions;
 import com.fyna.Fyna.core.shared.domain.User;
+import com.fyna.Fyna.core.shared.enums.NotificationType;
 import com.fyna.Fyna.core.shared.enums.RecurringTransactionsFrequencyTypes;
 import com.fyna.Fyna.core.shared.enums.TransactionsType;
 
@@ -32,15 +34,18 @@ public class RecurringTransactionService {
     private final AccountRepository accountRepository;
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
+    private final NotificationService notificationService;
 
     public RecurringTransactionService(RecurringTransactionRepository recurringTransactionRepository,
             TransactionRepository transactionRepository, AccountRepository accountRepository,
-            CategoryRepository categoryRepository, UserRepository userRepository) {
+            CategoryRepository categoryRepository, UserRepository userRepository,
+            NotificationService notificationService) {
         this.recurringTransactionRepository = recurringTransactionRepository;
         this.transactionRepository = transactionRepository;
         this.accountRepository = accountRepository;
         this.categoryRepository = categoryRepository;
         this.userRepository = userRepository;
+        this.notificationService = notificationService;
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +158,19 @@ public class RecurringTransactionService {
                 transaction.setIsRecurring(true);
                 transaction.setRecurringTransactions(rt);
 
-                transactionRepository.save(transaction);
+                transaction = transactionRepository.save(transaction);
+
+                String metadata = String.format(
+                        "{\"recurringId\":\"%s\",\"transactionId\":\"%s\",\"amount\":\"%s\"}",
+                        rt.getId(), transaction.getId(), rt.getAmount().toPlainString());
+                notificationService.createNotification(
+                        rt.getUser().getId(),
+                        NotificationType.RECURRING_TRANSACTION,
+                        "Transação recorrente gerada",
+                        String.format("\"%s\" foi registrada automaticamente.", rt.getDescription()),
+                        "/transactions/" + transaction.getId(),
+                        metadata
+                );
 
                 rt.setLastGenerated(rt.getNextOccurrence());
                 rt.setNextOccurrence(calculateNextOccurrence(rt.getNextOccurrence(), rt.getFrequency(), rt.getFrequencyInterval()));
