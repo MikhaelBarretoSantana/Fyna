@@ -31,6 +31,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   // Dados reais do backend
   List<AccountEntity> _accounts = [];
   List<TransactionEntity> _transactions = [];
+  int _unreadNotificationCount = 0;
 
   bool _isLoadingAccounts = true;
   bool _isLoadingTransactions = true;
@@ -142,8 +143,24 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Future<void> _loadData() async {
     await Future.wait([
       _loadAccounts(),
+      _loadUnreadNotificationCount(),
     ]);
     await _loadTransactions();
+  }
+
+  Future<void> _loadUnreadNotificationCount() async {
+    try {
+      final count =
+          await Injection.instance.notificationRepository.getUnreadCount();
+      if (mounted) {
+        setState(() => _unreadNotificationCount = count);
+      }
+    } catch (_) {
+      // Falha silenciosa — badge volta a zero
+      if (mounted) {
+        setState(() => _unreadNotificationCount = 0);
+      }
+    }
   }
 
   Future<void> _loadAccounts() async {
@@ -308,9 +325,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         icon: Icons.notifications_outlined,
         label: 'Notificações',
         color: const Color(0xFFE8893C),
-        onTap: () {
+        onTap: () async {
           Navigator.pop(ctx);
-          Navigator.pushNamed(context, AppRoutes.notifications);
+          await Navigator.pushNamed(context, AppRoutes.notifications);
+          if (mounted) await _loadUnreadNotificationCount();
         },
       ),
       _MoreMenuItem(
@@ -442,7 +460,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   label: item.label,
                   color: item.color,
                   onTap: item.onTap,
-                  badge: item.label == 'Notificações',
+                  badge: item.label == 'Notificações' &&
+                      _unreadNotificationCount > 0,
                 );
               },
             ),
@@ -862,8 +881,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           _buildIconButton(
             icon: Icons.notifications_none_rounded,
             isDark: isDark,
-            onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
-            badge: true,
+            onTap: () async {
+              await Navigator.pushNamed(context, AppRoutes.notifications);
+              if (mounted) await _loadUnreadNotificationCount();
+            },
+            badge: _unreadNotificationCount > 0,
           ),
         ],
       ),

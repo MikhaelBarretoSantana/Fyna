@@ -20,6 +20,9 @@ import 'package:fyna/feature/ai_classification/domain/repositories/ai_insights_r
 import 'package:fyna/feature/recurring/data/datasource/recurring_remote_datasource.dart';
 import 'package:fyna/feature/recurring/data/repositories/recurring_repository_impl.dart';
 import 'package:fyna/feature/recurring/domain/repositories/recurring_repository.dart';
+import 'package:fyna/feature/notifications/data/datasource/notification_remote_datasource.dart';
+import 'package:fyna/feature/notifications/data/repositories/notification_repository_impl.dart';
+import 'package:fyna/feature/notifications/domain/repositories/notification_repository.dart';
 
 /// Service locator simples — instanciado uma vez em main().
 class Injection {
@@ -52,6 +55,10 @@ class Injection {
   // Recurring
   late final RecurringRemoteDatasource recurringRemoteDatasource;
   late final RecurringRepository recurringRepository;
+
+  // Notifications
+  late final NotificationRemoteDatasource notificationRemoteDatasource;
+  late final NotificationRepository notificationRepository;
 
   // Biometric
   late final BiometricService biometricService;
@@ -96,6 +103,12 @@ class Injection {
     recurringRemoteDatasource = RecurringRemoteDatasource(dioClient.dio);
     recurringRepository = RecurringRepositoryImpl(
       datasource: recurringRemoteDatasource,
+    );
+
+    // Notifications
+    notificationRemoteDatasource = NotificationRemoteDatasource(dioClient.dio);
+    notificationRepository = NotificationRepositoryImpl(
+      datasource: notificationRemoteDatasource,
     );
 
     // Biometric

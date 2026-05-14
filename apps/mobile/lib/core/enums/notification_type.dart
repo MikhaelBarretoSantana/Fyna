@@ -1,25 +1,41 @@
+/// Tipos de notificação — espelha `NotificationType` do backend.
 enum NotificationType {
   BUDGET_ALERT,
-  GOAL_REACHED,
-  RECURRING_REMINDER,
+  GOAL_PROGRESS,
+  GOAL_COMPLETED,
+  BILL_REMINDER,
+  RECURRING_TRANSACTION,
   AI_INSIGHT,
+  SPENDING_ANOMALY,
+  INVESTMENT_RECOMMENDATION,
+  WEEKLY_SUMMARY,
   SYSTEM,
-  WEEKLY_SUMMARY;
+  SECURITY;
 
   String get label {
     switch (this) {
       case BUDGET_ALERT:
         return 'Alerta de Orçamento';
-      case GOAL_REACHED:
+      case GOAL_PROGRESS:
+        return 'Progresso da Meta';
+      case GOAL_COMPLETED:
         return 'Meta Atingida';
-      case RECURRING_REMINDER:
-        return 'Lembrete Recorrente';
+      case BILL_REMINDER:
+        return 'Conta a Pagar';
+      case RECURRING_TRANSACTION:
+        return 'Transação Recorrente';
       case AI_INSIGHT:
         return 'Insight de IA';
-      case SYSTEM:
-        return 'Sistema';
+      case SPENDING_ANOMALY:
+        return 'Gasto Atípico';
+      case INVESTMENT_RECOMMENDATION:
+        return 'Recomendação de Investimento';
       case WEEKLY_SUMMARY:
         return 'Resumo Semanal';
+      case SYSTEM:
+        return 'Sistema';
+      case SECURITY:
+        return 'Segurança';
     }
   }
 
