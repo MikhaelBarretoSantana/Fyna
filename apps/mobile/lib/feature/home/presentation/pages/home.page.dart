@@ -53,6 +53,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
     _loadData();
     _startBankNotificationListener();
+    // Registra token FCM no backend (somente após login bem-sucedido).
+    Injection.instance.fcmService.requestPermissionAndRegister();
   }
 
   @override

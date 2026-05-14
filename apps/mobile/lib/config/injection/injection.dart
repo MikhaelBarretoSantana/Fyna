@@ -21,8 +21,10 @@ import 'package:fyna/feature/recurring/data/datasource/recurring_remote_datasour
 import 'package:fyna/feature/recurring/data/repositories/recurring_repository_impl.dart';
 import 'package:fyna/feature/recurring/domain/repositories/recurring_repository.dart';
 import 'package:fyna/feature/notifications/data/datasource/notification_remote_datasource.dart';
+import 'package:fyna/feature/notifications/data/datasource/fcm_remote_datasource.dart';
 import 'package:fyna/feature/notifications/data/repositories/notification_repository_impl.dart';
 import 'package:fyna/feature/notifications/domain/repositories/notification_repository.dart';
+import 'package:fyna/core/services/fcm_service.dart';
 
 /// Service locator simples — instanciado uma vez em main().
 class Injection {
@@ -59,6 +61,10 @@ class Injection {
   // Notifications
   late final NotificationRemoteDatasource notificationRemoteDatasource;
   late final NotificationRepository notificationRepository;
+
+  // FCM (push notifications)
+  late final FcmRemoteDatasource fcmRemoteDatasource;
+  late final FcmService fcmService;
 
   // Biometric
   late final BiometricService biometricService;
@@ -110,6 +116,10 @@ class Injection {
     notificationRepository = NotificationRepositoryImpl(
       datasource: notificationRemoteDatasource,
     );
+
+    // FCM
+    fcmRemoteDatasource = FcmRemoteDatasource(dioClient.dio);
+    fcmService = FcmService(datasource: fcmRemoteDatasource);
 
     // Biometric
     biometricService = BiometricService();

@@ -50,6 +50,9 @@ dependencies {
 	// Mapping & Utilities
 	implementation("org.mapstruct:mapstruct:1.5.5.Final")
 	implementation("org.apache.commons:commons-lang3:3.14.0")
+
+	// Firebase Cloud Messaging (push notifications)
+	implementation("com.google.firebase:firebase-admin:9.3.0")
 	
 	// Lombok
 	compileOnly("org.projectlombok:lombok")

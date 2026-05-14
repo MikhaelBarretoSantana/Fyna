@@ -22,6 +22,9 @@ void main() async {
   final prefs = await SharedPreferences.getInstance();
   Injection.init(prefs);
 
+  // Inicializa Firebase / FCM (no-op se credenciais não estiverem configuradas)
+  await Injection.instance.fcmService.initialize();
+
   // Remove a splash após inicialização completa
   FlutterNativeSplash.remove();
 

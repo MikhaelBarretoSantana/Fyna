@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.fyna.Fyna.core.exception.ResourceNotFoundException;
 import com.fyna.Fyna.core.features.auth.data.repository.UserRepository;
 import com.fyna.Fyna.core.features.notifications.data.repository.NotificationRepository;
+import com.fyna.Fyna.core.features.notifications.infrastructure.fcm.FcmSender;
 import com.fyna.Fyna.core.features.notifications.presentation.dto.NotificationResponse;
 import com.fyna.Fyna.core.shared.domain.Notification;
 import com.fyna.Fyna.core.shared.domain.User;
@@ -23,10 +24,13 @@ public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
+    private final FcmSender fcmSender;
 
-    public NotificationService(NotificationRepository notificationRepository, UserRepository userRepository) {
+    public NotificationService(NotificationRepository notificationRepository, UserRepository userRepository,
+            FcmSender fcmSender) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
+        this.fcmSender = fcmSender;
     }
 
     @Transactional(readOnly = true)
@@ -92,6 +96,10 @@ public class NotificationService {
         notification.setIsPushed(false);
 
         notification = notificationRepository.save(notification);
+
+        // Push assíncrono via FCM. Se o Firebase não estiver configurado, vira no-op.
+        fcmSender.sendToUser(userId, notification);
+
         return NotificationResponse.from(notification);
     }
 }
