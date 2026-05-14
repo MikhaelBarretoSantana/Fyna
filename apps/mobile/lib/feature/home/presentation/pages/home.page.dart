@@ -7,6 +7,7 @@ import 'package:fyna/core/constants/app_colors.dart';
 import 'package:fyna/core/errors/exceptions.dart';
 import 'package:fyna/core/services/bank_notification_service.dart';
 import 'package:fyna/feature/account/domain/entities/account_entity.dart';
+import 'package:fyna/feature/notifications/domain/entities/notification_entity.dart';
 import 'package:fyna/feature/transaction/domain/entities/transaction_entity.dart';
 import 'package:fyna/feature/home/presentation/widgets/home_balance_section.dart';
 import 'package:fyna/feature/home/presentation/widgets/home_quick_actions.dart';
@@ -44,6 +45,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final _bankNotificationService = BankNotificationService();
   StreamSubscription<ParsedBankTransaction>? _bankNotificationSub;
 
+  // WebSocket real-time
+  StreamSubscription<NotificationEntity>? _notificationSocketSub;
+
   @override
   void initState() {
     super.initState();
@@ -53,6 +57,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
     _loadData();
     _startBankNotificationListener();
+    _startNotificationSocket();
     // Registra token FCM no backend (somente após login bem-sucedido).
     Injection.instance.fcmService.requestPermissionAndRegister();
   }
@@ -61,7 +66,18 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   void dispose() {
     _navIndicatorController.dispose();
     _bankNotificationSub?.cancel();
+    _notificationSocketSub?.cancel();
     super.dispose();
+  }
+
+  /// Conecta ao backend via STOMP e incrementa o badge ao receber notificações.
+  void _startNotificationSocket() {
+    final socket = Injection.instance.notificationSocketService;
+    socket.connect();
+    _notificationSocketSub = socket.notifications.listen((_) {
+      if (!mounted) return;
+      setState(() => _unreadNotificationCount += 1);
+    });
   }
 
   void _startBankNotificationListener() {

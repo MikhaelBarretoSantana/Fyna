@@ -51,6 +51,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/actuator/health").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // Handshake do WebSocket — autenticação é feita no frame STOMP CONNECT
+                        .requestMatchers("/ws/**").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/categories/system").permitAll()
                         .anyRequest().authenticated()
                 )

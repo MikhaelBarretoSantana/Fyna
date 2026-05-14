@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:fyna/config/injection/injection.dart';
 import 'package:fyna/core/constants/app_colors.dart';
@@ -17,6 +19,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
   List<NotificationEntity> _notifications = [];
   bool _isLoading = true;
   String? _errorMessage;
+  StreamSubscription<NotificationEntity>? _socketSub;
 
   int get _unreadCount => _notifications.where((n) => !n.isRead).length;
 
@@ -24,6 +27,21 @@ class _NotificationsPageState extends State<NotificationsPage> {
   void initState() {
     super.initState();
     _loadNotifications();
+    _socketSub = Injection.instance.notificationSocketService.notifications
+        .listen(_onIncomingNotification);
+  }
+
+  @override
+  void dispose() {
+    _socketSub?.cancel();
+    super.dispose();
+  }
+
+  void _onIncomingNotification(NotificationEntity n) {
+    if (!mounted) return;
+    setState(() {
+      _notifications = [n, ..._notifications.where((e) => e.id != n.id)];
+    });
   }
 
   Future<void> _loadNotifications() async {

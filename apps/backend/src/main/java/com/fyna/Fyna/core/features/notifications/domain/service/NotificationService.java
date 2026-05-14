@@ -13,6 +13,7 @@ import com.fyna.Fyna.core.exception.ResourceNotFoundException;
 import com.fyna.Fyna.core.features.auth.data.repository.UserRepository;
 import com.fyna.Fyna.core.features.notifications.data.repository.NotificationRepository;
 import com.fyna.Fyna.core.features.notifications.infrastructure.fcm.FcmSender;
+import com.fyna.Fyna.core.features.notifications.infrastructure.websocket.NotificationBroadcaster;
 import com.fyna.Fyna.core.features.notifications.presentation.dto.NotificationResponse;
 import com.fyna.Fyna.core.shared.domain.Notification;
 import com.fyna.Fyna.core.shared.domain.User;
@@ -25,12 +26,14 @@ public class NotificationService {
     private final NotificationRepository notificationRepository;
     private final UserRepository userRepository;
     private final FcmSender fcmSender;
+    private final NotificationBroadcaster broadcaster;
 
     public NotificationService(NotificationRepository notificationRepository, UserRepository userRepository,
-            FcmSender fcmSender) {
+            FcmSender fcmSender, NotificationBroadcaster broadcaster) {
         this.notificationRepository = notificationRepository;
         this.userRepository = userRepository;
         this.fcmSender = fcmSender;
+        this.broadcaster = broadcaster;
     }
 
     @Transactional(readOnly = true)
@@ -96,10 +99,15 @@ public class NotificationService {
         notification.setIsPushed(false);
 
         notification = notificationRepository.save(notification);
+        NotificationResponse response = NotificationResponse.from(notification);
 
-        // Push assíncrono via FCM. Se o Firebase não estiver configurado, vira no-op.
+        // Entrega in-app via WebSocket — chega instantaneamente se o app estiver conectado.
+        broadcaster.broadcastToUser(userId, response);
+
+        // Push assíncrono via FCM — entrega mesmo com app fechado.
+        // Se o Firebase não estiver configurado, vira no-op.
         fcmSender.sendToUser(userId, notification);
 
-        return NotificationResponse.from(notification);
+        return response;
     }
 }

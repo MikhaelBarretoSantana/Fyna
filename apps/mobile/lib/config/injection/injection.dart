@@ -25,6 +25,7 @@ import 'package:fyna/feature/notifications/data/datasource/fcm_remote_datasource
 import 'package:fyna/feature/notifications/data/repositories/notification_repository_impl.dart';
 import 'package:fyna/feature/notifications/domain/repositories/notification_repository.dart';
 import 'package:fyna/core/services/fcm_service.dart';
+import 'package:fyna/core/services/notification_socket_service.dart';
 
 /// Service locator simples — instanciado uma vez em main().
 class Injection {
@@ -65,6 +66,9 @@ class Injection {
   // FCM (push notifications)
   late final FcmRemoteDatasource fcmRemoteDatasource;
   late final FcmService fcmService;
+
+  // WebSocket (real-time in-app)
+  late final NotificationSocketService notificationSocketService;
 
   // Biometric
   late final BiometricService biometricService;
@@ -120,6 +124,10 @@ class Injection {
     // FCM
     fcmRemoteDatasource = FcmRemoteDatasource(dioClient.dio);
     fcmService = FcmService(datasource: fcmRemoteDatasource);
+
+    // WebSocket
+    notificationSocketService =
+        NotificationSocketService(tokenStorage: tokenStorage);
 
     // Biometric
     biometricService = BiometricService();
