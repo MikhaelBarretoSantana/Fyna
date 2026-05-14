@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:fyna/config/injection/injection.dart';
 import 'package:fyna/core/constants/app_colors.dart';
+import 'package:fyna/core/enums/goal_priority.dart';
+import 'package:fyna/core/errors/exceptions.dart';
 
 class CreateGoalPage extends StatefulWidget {
   const CreateGoalPage({super.key});
@@ -15,7 +18,7 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
   final _targetController = TextEditingController();
 
   DateTime? _targetDate;
-  int _priority = 1;
+  GoalPriority _priority = GoalPriority.MEDIUM;
   int _selectedColorIndex = 0;
   bool _isSubmitting = false;
 
@@ -30,6 +33,19 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
     AppColors.categoryEntertainment,
     AppColors.categoryEducation,
     AppColors.categoryShopping,
+  ];
+
+  static const List<String> _colorHex = [
+    '#1A7B8C', // primary
+    '#00D4AA', // accent
+    '#00C853', // success
+    '#2196F3', // info
+    '#FFB300', // warning
+    '#FF5252', // error
+    '#AA96DA', // categoryTravel
+    '#FFE66D', // categoryEntertainment
+    '#A8D8EA', // categoryEducation
+    '#F38181', // categoryShopping
   ];
 
   @override
@@ -60,7 +76,6 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Preview card
               _buildPreviewCard(isDark),
               const SizedBox(height: 24),
               _buildTextField(
@@ -83,11 +98,16 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
               _buildTextField(
                 controller: _targetController,
                 label: 'Valor da meta',
-                hint: 'R\$ 0,00',
+                hint: 'Ex: 5000.00',
                 isDark: isDark,
-                keyboardType: TextInputType.number,
-                validator: (v) =>
-                    v == null || v.isEmpty ? 'Informe o valor' : null,
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                validator: (v) {
+                  if (v == null || v.isEmpty) return 'Informe o valor';
+                  final parsed = double.tryParse(v.replaceAll(',', '.'));
+                  if (parsed == null || parsed <= 0) return 'Valor inválido';
+                  return null;
+                },
               ),
               const SizedBox(height: 16),
               _buildDatePicker(isDark),
@@ -100,7 +120,7 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _handleSubmit,
+                  onPressed: _isSubmitting ? null : () => _handleSubmit(isDark),
                   style: ElevatedButton.styleFrom(
                     backgroundColor:
                         isDark ? AppColors.darkAccent : AppColors.primary,
@@ -214,8 +234,7 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
               color: isDark ? Colors.white24 : Colors.black26,
             ),
             filled: true,
-            fillColor:
-                isDark ? const Color(0xFF14142A) : Colors.white,
+            fillColor: isDark ? const Color(0xFF14142A) : Colors.white,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(
@@ -235,8 +254,7 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(14),
               borderSide: BorderSide(
-                color:
-                    isDark ? AppColors.darkAccent : AppColors.primary,
+                color: isDark ? AppColors.darkAccent : AppColors.primary,
               ),
             ),
           ),
@@ -273,8 +291,7 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
             padding:
                 const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
             decoration: BoxDecoration(
-              color:
-                  isDark ? const Color(0xFF14142A) : Colors.white,
+              color: isDark ? const Color(0xFF14142A) : Colors.white,
               borderRadius: BorderRadius.circular(14),
               border: Border.all(
                 color: isDark
@@ -323,20 +340,18 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
         ),
         const SizedBox(height: 8),
         Row(
-          children: List.generate(5, (index) {
-            final value = index + 1;
-            final isSelected = _priority == value;
+          children: GoalPriority.values.map((p) {
+            final isSelected = _priority == p;
             return Expanded(
               child: GestureDetector(
-                onTap: () => setState(() => _priority = value),
+                onTap: () => setState(() => _priority = p),
                 child: Container(
-                  margin: EdgeInsets.only(right: index < 4 ? 8 : 0),
+                  margin: EdgeInsets.only(
+                      right: p != GoalPriority.values.last ? 8 : 0),
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? (isDark
-                            ? AppColors.darkAccent
-                            : AppColors.primary)
+                        ? (isDark ? AppColors.darkAccent : AppColors.primary)
                         : (isDark
                             ? const Color(0xFF14142A)
                             : Colors.white),
@@ -351,9 +366,9 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
                   ),
                   child: Center(
                     child: Text(
-                      '$value',
+                      p.label,
                       style: TextStyle(
-                        fontSize: 15,
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                         color: isSelected
                             ? Colors.white
@@ -364,7 +379,7 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
                 ),
               ),
             );
-          }),
+          }).toList(),
         ),
       ],
     );
@@ -396,9 +411,8 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
                 decoration: BoxDecoration(
                   color: _colors[index],
                   borderRadius: BorderRadius.circular(12),
-                  border: isSelected
-                      ? Border.all(color: Colors.white, width: 3)
-                      : null,
+                  border:
+                      isSelected ? Border.all(color: Colors.white, width: 3) : null,
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
@@ -420,10 +434,47 @@ class _CreateGoalPageState extends State<CreateGoalPage> {
     );
   }
 
-  void _handleSubmit() {
-    if (_formKey.currentState!.validate()) {
-      // TODO: Chamar API para criar meta
-      Navigator.pop(context, true);
+  Future<void> _handleSubmit(bool isDark) async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final targetAmount =
+        double.parse(_targetController.text.replaceAll(',', '.'));
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      await Injection.instance.goalRepository.createGoal(
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty
+            ? null
+            : _descriptionController.text.trim(),
+        targetAmount: targetAmount,
+        targetDate: _targetDate,
+        color: _colorHex[_selectedColorIndex],
+        priority: _priority.toJson(),
+      );
+
+      if (mounted) Navigator.pop(context, true);
+    } on ServerException catch (e) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.message),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isSubmitting = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Erro ao criar meta'),
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
     }
   }
 }

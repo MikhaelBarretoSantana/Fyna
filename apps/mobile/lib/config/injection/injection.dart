@@ -20,6 +20,9 @@ import 'package:fyna/feature/ai_classification/domain/repositories/ai_insights_r
 import 'package:fyna/feature/recurring/data/datasource/recurring_remote_datasource.dart';
 import 'package:fyna/feature/recurring/data/repositories/recurring_repository_impl.dart';
 import 'package:fyna/feature/recurring/domain/repositories/recurring_repository.dart';
+import 'package:fyna/feature/goals/data/datasource/goal_remote_datasource.dart';
+import 'package:fyna/feature/goals/data/repositories/goal_repository_impl.dart';
+import 'package:fyna/feature/goals/domain/repositories/goal_repository.dart';
 import 'package:fyna/feature/notifications/data/datasource/notification_remote_datasource.dart';
 import 'package:fyna/feature/notifications/data/datasource/fcm_remote_datasource.dart';
 import 'package:fyna/feature/notifications/data/repositories/notification_repository_impl.dart';
@@ -58,6 +61,10 @@ class Injection {
   // Recurring
   late final RecurringRemoteDatasource recurringRemoteDatasource;
   late final RecurringRepository recurringRepository;
+
+  // Goals
+  late final GoalRemoteDatasource goalRemoteDatasource;
+  late final GoalRepository goalRepository;
 
   // Notifications
   late final NotificationRemoteDatasource notificationRemoteDatasource;
@@ -114,6 +121,10 @@ class Injection {
     recurringRepository = RecurringRepositoryImpl(
       datasource: recurringRemoteDatasource,
     );
+
+    // Goals
+    goalRemoteDatasource = GoalRemoteDatasource(dioClient.dio);
+    goalRepository = GoalRepositoryImpl(datasource: goalRemoteDatasource);
 
     // Notifications
     notificationRemoteDatasource = NotificationRemoteDatasource(dioClient.dio);
