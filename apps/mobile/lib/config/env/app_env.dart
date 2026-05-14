@@ -2,8 +2,9 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 
 abstract class AppEnv {
   /// URL do ngrok para testes em dispositivo físico.
+  /// Domínio estático reservado — não muda entre restarts do `docker compose up`.
   /// Deixe null para usar localhost/emulador.
-  static const String? _ngrokUrl = 'https://2084-45-65-201-225.ngrok-free.app';
+  static const String? _ngrokUrl = 'https://glutinous-reforest-grape.ngrok-free.dev';
 
   static const String _basePath = '/api/v1';
 
