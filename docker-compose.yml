@@ -1,3 +1,5 @@
+name: fyna
+
 services:
 
   # ── Python AI Microservice ───────────────────────────────────
@@ -38,4 +40,17 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       fyna-ai:
+        condition: service_started
+
+  # ── ngrok Tunnel (expõe fyna-back para internet) ─────────────
+  fyna-ngrok:
+    image: ngrok/ngrok:latest
+    container_name: fyna-ngrok
+    command: http --url=https://${NGROK_DOMAIN} fyna-back:8080
+    environment:
+      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+    ports:
+      - "4040:4040"
+    depends_on:
+      fyna-back:
         condition: service_started
