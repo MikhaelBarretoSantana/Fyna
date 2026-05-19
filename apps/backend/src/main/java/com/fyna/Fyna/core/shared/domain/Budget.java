@@ -65,6 +65,9 @@ public class Budget extends AbstractAuditingEntity<UUID> {
     @Column(name = "end_date", nullable = false)
     private LocalDate endDate;
 
+    @Column(name = "current_period_start", nullable = false)
+    private LocalDate currentPeriodStart;
+
     @Column(name = "alert_threshold", nullable = false, precision = 5, scale = 2)
     private BigDecimal alertThreshold = new BigDecimal("80.00");
 
@@ -174,6 +177,14 @@ public class Budget extends AbstractAuditingEntity<UUID> {
 
     public void setEndDate(LocalDate endDate) {
         this.endDate = endDate;
+    }
+
+    public LocalDate getCurrentPeriodStart() {
+        return currentPeriodStart;
+    }
+
+    public void setCurrentPeriodStart(LocalDate currentPeriodStart) {
+        this.currentPeriodStart = currentPeriodStart;
     }
 
     public BigDecimal getAlertThreshold() {

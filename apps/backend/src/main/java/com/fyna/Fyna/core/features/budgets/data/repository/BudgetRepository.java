@@ -17,6 +17,8 @@ public interface BudgetRepository extends JpaRepository<Budget, UUID> {
 
     List<Budget> findByUserIdAndIsActiveTrue(UUID userId);
 
+    long countByCategoryIdAndIsActiveTrue(UUID categoryId);
+
     List<Budget> findByUserId(UUID userId);
 
     Optional<Budget> findByIdAndUserId(UUID id, UUID userId);
@@ -29,4 +31,10 @@ public interface BudgetRepository extends JpaRepository<Budget, UUID> {
             "AND b.isActive = true AND b.startDate <= :date AND b.endDate >= :date")
     List<Budget> findActiveBudgetsByCategoryForDate(@Param("userId") UUID userId,
             @Param("categoryId") UUID categoryId, @Param("date") LocalDate date);
+
+    /** Budgets globais (category IS NULL) — somam toda despesa paga do usuário no período. */
+    @Query("SELECT b FROM Budget b WHERE b.user.id = :userId AND b.category IS NULL " +
+            "AND b.isActive = true AND b.startDate <= :date AND b.endDate >= :date")
+    List<Budget> findActiveGlobalBudgetsForDate(@Param("userId") UUID userId,
+            @Param("date") LocalDate date);
 }

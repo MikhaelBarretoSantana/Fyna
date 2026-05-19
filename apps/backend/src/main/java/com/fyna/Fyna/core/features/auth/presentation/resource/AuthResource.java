@@ -47,9 +47,19 @@ public class AuthResource {
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
+    /**
+     * Logout do device corrente quando {@code refreshToken} é informado no body.
+     * Se o body for omitido, faz logout global (todos os devices) — comportamento
+     * histórico mantido por compatibilidade com clients legados.
+     */
     @PostMapping("/logout")
-    public ResponseEntity<ApiResponse<Void>> logout() {
-        authService.logout(securityUtils.getCurrentUserId());
+    public ResponseEntity<ApiResponse<Void>> logout(@RequestBody(required = false) RefreshTokenRequest request) {
+        var userId = securityUtils.getCurrentUserId();
+        if (request != null && request.refreshToken() != null && !request.refreshToken().isBlank()) {
+            authService.logoutDevice(userId, request.refreshToken());
+        } else {
+            authService.logout(userId);
+        }
         return ResponseEntity.ok(ApiResponse.ok("Logout realizado com sucesso", null));
     }
 }

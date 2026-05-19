@@ -121,7 +121,7 @@ class AuthServiceTest {
         var result = authService.login(request);
 
         assertThat(result.accessToken()).isEqualTo("access-token");
-        assertThat(result.userInfo().login()).isEqualTo("joao");
+        assertThat(result.user().login()).isEqualTo("joao");
     }
 
     @Test
@@ -143,8 +143,7 @@ class AuthServiceTest {
         rt.setIsRevoked(false);
         rt.setExpiresAt(Instant.now().minusSeconds(3600));
 
-        when(refreshTokenRepository.findByTokenHashAndIsRevokedFalse(anyString()))
-                .thenReturn(Optional.of(rt));
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(rt));
 
         assertThatThrownBy(() -> authService.refreshToken(new RefreshTokenRequest("some-token")))
                 .isInstanceOf(UnauthorizedException.class)
@@ -153,12 +152,44 @@ class AuthServiceTest {
 
     @Test
     void refreshToken_deveLancarExcecaoQuandoTokenInvalido() {
-        when(refreshTokenRepository.findByTokenHashAndIsRevokedFalse(anyString()))
-                .thenReturn(Optional.empty());
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> authService.refreshToken(new RefreshTokenRequest("invalid")))
                 .isInstanceOf(UnauthorizedException.class)
                 .hasMessageContaining("inválido");
+    }
+
+    @Test
+    void refreshToken_quandoJaRevogado_revogaTodaArvoreEFalha() {
+        var rt = new RefreshTokens();
+        rt.setUser(fakeUser);
+        rt.setIsRevoked(true); // já revogado — reuse detection
+        rt.setExpiresAt(Instant.now().plusSeconds(3600));
+
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(rt));
+
+        assertThatThrownBy(() -> authService.refreshToken(new RefreshTokenRequest("reused")))
+                .isInstanceOf(UnauthorizedException.class);
+
+        verify(refreshTokenRepository).revokeAllByUserId(any(UUID.class), any(Instant.class));
+    }
+
+    @Test
+    void refreshToken_paraleloPerdeRace_falhaSemEmitirAccessToken() {
+        var rt = new RefreshTokens();
+        rt.setUser(fakeUser);
+        rt.setIsRevoked(false);
+        rt.setExpiresAt(Instant.now().plusSeconds(3600));
+
+        when(refreshTokenRepository.findByTokenHash(anyString())).thenReturn(Optional.of(rt));
+        // Outra thread já revogou: revokeIfActive retorna 0
+        when(refreshTokenRepository.revokeIfActive(anyString(), any(Instant.class))).thenReturn(0);
+
+        assertThatThrownBy(() -> authService.refreshToken(new RefreshTokenRequest("racing-token")))
+                .isInstanceOf(UnauthorizedException.class);
+
+        // generateAuthResponse não é chamado — nenhum save de novo refresh
+        verify(jwtTokenProvider, never()).generateAccessToken(any(), anyString());
     }
 
     // ─── Logout ─────────────────────────────────────────────────────────

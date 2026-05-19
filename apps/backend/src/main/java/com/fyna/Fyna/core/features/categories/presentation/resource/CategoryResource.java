@@ -60,7 +60,7 @@ public class CategoryResource {
 
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<CategoryResponse>> getCategory(@PathVariable UUID id) {
-        CategoryResponse category = categoryService.getCategory(id);
+        CategoryResponse category = categoryService.getCategory(id, securityUtils.getCurrentUserId());
         return ResponseEntity.ok(ApiResponse.ok(category));
     }
 

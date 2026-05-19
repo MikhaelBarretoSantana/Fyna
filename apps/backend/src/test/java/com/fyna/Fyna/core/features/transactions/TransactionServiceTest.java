@@ -3,6 +3,7 @@ package com.fyna.Fyna.core.features.transactions;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -19,14 +20,18 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.fyna.Fyna.core.exception.BadRequestException;
 import com.fyna.Fyna.core.exception.ResourceNotFoundException;
 import com.fyna.Fyna.core.features.accounts.data.repository.AccountRepository;
 import com.fyna.Fyna.core.features.ai.infrastructure.AIEngineClient;
 import com.fyna.Fyna.core.features.auth.data.repository.UserRepository;
+import com.fyna.Fyna.core.features.budgets.domain.service.BudgetService;
 import com.fyna.Fyna.core.features.categories.data.repository.CategoryRepository;
+import com.fyna.Fyna.core.features.notifications.domain.service.NotificationService;
 import com.fyna.Fyna.core.features.transactions.data.repository.TransactionRepository;
 import com.fyna.Fyna.core.features.transactions.domain.service.TransactionService;
 import com.fyna.Fyna.core.features.transactions.presentation.dto.CreateTransactionRequest;
+import com.fyna.Fyna.core.features.transactions.presentation.dto.UpdateTransactionRequest;
 import com.fyna.Fyna.core.shared.domain.Accounts;
 import com.fyna.Fyna.core.shared.domain.Transactions;
 import com.fyna.Fyna.core.shared.domain.User;
@@ -40,6 +45,8 @@ class TransactionServiceTest {
     @Mock CategoryRepository categoryRepository;
     @Mock UserRepository userRepository;
     @Mock AIEngineClient aiEngineClient;
+    @Mock BudgetService budgetService;
+    @Mock NotificationService notificationService;
 
     @InjectMocks TransactionService transactionService;
 
@@ -185,5 +192,135 @@ class TransactionServiceTest {
 
         assertThatThrownBy(() -> transactionService.createTransaction(userId, request))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void createTransaction_transferParaMesmaConta_deveFalhar() {
+        var sameAccountId = fakeAccount.getId();
+        var request = new CreateTransactionRequest(
+                sameAccountId, null, TransactionsType.TRANSFER,
+                BigDecimal.valueOf(100), "Inválido", null,
+                LocalDate.now(), null, true, null, sameAccountId
+        );
+
+        assertThatThrownBy(() -> transactionService.createTransaction(userId, request))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("diferentes");
+    }
+
+    // ─── deleteTransaction ───────────────────────────────────────────────
+
+    @Test
+    void deleteTransaction_transferPaga_revertSaldoNosDoisLadosERemovePar() {
+        // origem: saldo 1000, destino: saldo 500. TRANSFER de 100 já paga.
+        Accounts destination = new Accounts();
+        destination.setId(UUID.randomUUID());
+        destination.setUser(fakeUser);
+        destination.setCurrentBalance(BigDecimal.valueOf(600)); // já recebeu os 100
+
+        fakeAccount.setCurrentBalance(BigDecimal.valueOf(900)); // já saiu 100
+
+        Transactions origem = new Transactions();
+        origem.setId(UUID.randomUUID());
+        origem.setUser(fakeUser);
+        origem.setAccount(fakeAccount);
+        origem.setType(TransactionsType.TRANSFER);
+        origem.setAmount(BigDecimal.valueOf(100));
+        origem.setTransactionDate(LocalDate.now());
+        origem.setIsPaid(true);
+
+        Transactions par = new Transactions();
+        par.setId(UUID.randomUUID());
+        par.setUser(fakeUser);
+        par.setAccount(destination);
+        par.setType(TransactionsType.TRANSFER);
+        par.setAmount(BigDecimal.valueOf(100));
+        par.setTransactionDate(LocalDate.now());
+        par.setIsPaid(true);
+
+        origem.setTransactions(par);
+        par.setTransactions(origem);
+
+        when(transactionRepository.findByIdAndUserId(origem.getId(), userId)).thenReturn(Optional.of(origem));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        transactionService.deleteTransaction(origem.getId(), userId);
+
+        // origem: 900 + 100 = 1000 (revert)
+        assertThat(fakeAccount.getCurrentBalance()).isEqualByComparingTo("1000");
+        // destino: 600 - 100 = 500 (revert)
+        assertThat(destination.getCurrentBalance()).isEqualByComparingTo("500");
+
+        // Par e origem foram deletados
+        verify(transactionRepository).delete(par);
+        verify(transactionRepository).delete(origem);
+    }
+
+    @Test
+    void deleteTransaction_despesaPaga_devolveSaldoEReverteBudget() {
+        UUID catId = UUID.randomUUID();
+        com.fyna.Fyna.core.shared.domain.Categories cat = new com.fyna.Fyna.core.shared.domain.Categories();
+        cat.setId(catId);
+
+        fakeAccount.setCurrentBalance(BigDecimal.valueOf(900));
+
+        Transactions tx = new Transactions();
+        tx.setId(UUID.randomUUID());
+        tx.setUser(fakeUser);
+        tx.setAccount(fakeAccount);
+        tx.setCategories(cat);
+        tx.setType(TransactionsType.EXPENSE);
+        tx.setAmount(BigDecimal.valueOf(100));
+        tx.setTransactionDate(LocalDate.now());
+        tx.setIsPaid(true);
+
+        when(transactionRepository.findByIdAndUserId(tx.getId(), userId)).thenReturn(Optional.of(tx));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        transactionService.deleteTransaction(tx.getId(), userId);
+
+        assertThat(fakeAccount.getCurrentBalance()).isEqualByComparingTo("1000");
+        verify(budgetService).applyTransactionDelta(eq(userId), eq(catId),
+                eq(BigDecimal.valueOf(100).negate()), eq(LocalDate.now()));
+        verify(transactionRepository).delete(tx);
+    }
+
+    // ─── updateTransaction ───────────────────────────────────────────────
+
+    @Test
+    void updateTransaction_mudaValorDeDespesaPaga_aplicaDiferencaNoSaldoEReconciliaBudget() {
+        UUID catId = UUID.randomUUID();
+        com.fyna.Fyna.core.shared.domain.Categories cat = new com.fyna.Fyna.core.shared.domain.Categories();
+        cat.setId(catId);
+
+        fakeAccount.setCurrentBalance(BigDecimal.valueOf(900)); // já tinha saído 100
+
+        Transactions tx = new Transactions();
+        tx.setId(UUID.randomUUID());
+        tx.setUser(fakeUser);
+        tx.setAccount(fakeAccount);
+        tx.setCategories(cat);
+        tx.setType(TransactionsType.EXPENSE);
+        tx.setAmount(BigDecimal.valueOf(100));
+        tx.setTransactionDate(LocalDate.now());
+        tx.setIsPaid(true);
+
+        var request = new UpdateTransactionRequest(null, BigDecimal.valueOf(250), null, null,
+                null, null, null, null);
+
+        when(transactionRepository.findByIdAndUserId(tx.getId(), userId)).thenReturn(Optional.of(tx));
+        when(transactionRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(accountRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        transactionService.updateTransaction(tx.getId(), userId, request);
+
+        // Saldo: 900 + 100 (revert antigo) - 250 (aplica novo) = 750
+        assertThat(fakeAccount.getCurrentBalance()).isEqualByComparingTo("750");
+        // Budget: -100 (revert antigo) + 250 (novo)
+        verify(budgetService).applyTransactionDelta(eq(userId), eq(catId),
+                eq(BigDecimal.valueOf(100).negate()), eq(LocalDate.now()));
+        verify(budgetService).applyTransactionDelta(eq(userId), eq(catId),
+                eq(BigDecimal.valueOf(250)), eq(LocalDate.now()));
     }
 }

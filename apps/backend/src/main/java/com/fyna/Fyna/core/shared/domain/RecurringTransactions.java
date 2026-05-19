@@ -48,6 +48,11 @@ public class RecurringTransactions extends AbstractAuditingEntity<UUID> {
     @JoinColumn(name = "category_id")
     private Categories categories;
 
+    /** Conta destino para recorrentes do tipo TRANSFER. NULL para INCOME/EXPENSE. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "transfer_account_id")
+    private Accounts transferAccount;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "type", length = 20, nullable = false)
     private RecurringTransactionsTypes type;
@@ -133,6 +138,14 @@ public class RecurringTransactions extends AbstractAuditingEntity<UUID> {
 
     public void setCategories(Categories categories) {
         this.categories = categories;
+    }
+
+    public Accounts getTransferAccount() {
+        return transferAccount;
+    }
+
+    public void setTransferAccount(Accounts transferAccount) {
+        this.transferAccount = transferAccount;
     }
 
     public RecurringTransactionsTypes getType() {

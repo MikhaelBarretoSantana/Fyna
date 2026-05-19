@@ -18,7 +18,19 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshTokens, UUI
 
     Optional<RefreshTokens> findByTokenHashAndIsRevokedFalse(String tokenHash);
 
+    Optional<RefreshTokens> findByTokenHash(String tokenHash);
+
     List<RefreshTokens> findByUserIdAndIsRevokedFalse(UUID userId);
+
+    /**
+     * Revoga atomicamente um token específico apenas se ainda não estava revogado.
+     * Retorna 1 se a chamada conseguiu revogar, 0 se já estava revogado por outra
+     * thread/processo — usado para detectar reuse e quebrar a race em refresh paralelo.
+     */
+    @Modifying
+    @Query("UPDATE RefreshTokens r SET r.isRevoked = true, r.revokedAt = :now " +
+            "WHERE r.tokenHash = :tokenHash AND r.isRevoked = false")
+    int revokeIfActive(@Param("tokenHash") String tokenHash, @Param("now") Instant now);
 
     @Modifying
     @Query("UPDATE RefreshTokens r SET r.isRevoked = true, r.revokedAt = :now WHERE r.user.id = :userId AND r.isRevoked = false")
