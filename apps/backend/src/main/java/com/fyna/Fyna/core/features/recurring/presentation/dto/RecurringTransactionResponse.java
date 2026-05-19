@@ -11,6 +11,7 @@ import com.fyna.Fyna.core.shared.enums.RecurringTransactionsTypes;
 public record RecurringTransactionResponse(
         UUID id,
         UUID accountId,
+        UUID transferAccountId,
         UUID categoryId,
         String categoryName,
         RecurringTransactionsTypes type,
@@ -28,6 +29,7 @@ public record RecurringTransactionResponse(
         return new RecurringTransactionResponse(
                 rt.getId(),
                 rt.getAccount() != null ? rt.getAccount().getId() : null,
+                rt.getTransferAccount() != null ? rt.getTransferAccount().getId() : null,
                 rt.getCategories() != null ? rt.getCategories().getId() : null,
                 rt.getCategories() != null ? rt.getCategories().getName() : null,
                 rt.getType(),

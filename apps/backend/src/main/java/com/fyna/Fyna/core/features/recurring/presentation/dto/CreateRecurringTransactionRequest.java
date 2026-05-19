@@ -16,6 +16,9 @@ public record CreateRecurringTransactionRequest(
         @NotNull(message = "Conta é obrigatória")
         UUID accountId,
 
+        /** Obrigatório quando {@code type == TRANSFER}; ignorado para INCOME/EXPENSE. */
+        UUID transferAccountId,
+
         UUID categoryId,
 
         @NotNull(message = "Tipo é obrigatório")

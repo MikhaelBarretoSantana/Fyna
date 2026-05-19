@@ -57,4 +57,18 @@ public interface TransactionRepository extends JpaRepository<Transactions, UUID>
 
     long countByUserIdAndCategoriesIdAndTypeAndTransactionDateBetween(
             UUID userId, UUID categoryId, TransactionsType type, LocalDate startDate, LocalDate endDate);
+
+    @Query("SELECT t.amount FROM Transactions t " +
+            "WHERE t.user.id = :userId AND t.categories.id = :categoryId AND t.type = :type " +
+            "AND t.transactionDate BETWEEN :startDate AND :endDate")
+    List<java.math.BigDecimal> findAmountsByUserCategoryType(
+            @Param("userId") UUID userId,
+            @Param("categoryId") UUID categoryId,
+            @Param("type") TransactionsType type,
+            @Param("startDate") LocalDate startDate,
+            @Param("endDate") LocalDate endDate);
+
+    long countByCategoriesId(UUID categoryId);
+
+    long countByAccountId(UUID accountId);
 }

@@ -13,11 +13,14 @@ import com.fyna.Fyna.core.shared.enums.FinancialGoalStatus;
 @Repository
 public interface FinancialGoalRepository extends JpaRepository<FinancialGoal, UUID> {
 
-    List<FinancialGoal> findByUserId(UUID userId);
+    List<FinancialGoal> findByUserIdAndIsActiveTrue(UUID userId);
 
-    List<FinancialGoal> findByUserIdAndStatus(UUID userId, FinancialGoalStatus status);
+    List<FinancialGoal> findByUserIdAndStatusAndIsActiveTrue(UUID userId, FinancialGoalStatus status);
 
+    Optional<FinancialGoal> findByIdAndUserIdAndIsActiveTrue(UUID id, UUID userId);
+
+    /** Usado quando precisamos do registro mesmo após soft-delete (auditoria). */
     Optional<FinancialGoal> findByIdAndUserId(UUID id, UUID userId);
 
-    long countByUserIdAndStatus(UUID userId, FinancialGoalStatus status);
+    long countByUserIdAndStatusAndIsActiveTrue(UUID userId, FinancialGoalStatus status);
 }

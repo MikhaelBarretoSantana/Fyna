@@ -152,15 +152,16 @@ public class AIInsightsResource {
     @GetMapping("/classifications/transaction/{transactionId}")
     public ResponseEntity<ApiResponse<AIClassificationResponse>> getClassificationByTransaction(
             @PathVariable UUID transactionId) {
-        AIClassificationResponse response = aiInsightsService.getClassificationByTransaction(transactionId);
+        AIClassificationResponse response =
+                aiInsightsService.getClassificationByTransaction(securityUtils.getCurrentUserId(), transactionId);
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 
     @PostMapping("/classifications/{id}/confirm")
     public ResponseEntity<ApiResponse<AIClassificationResponse>> confirmClassification(
             @PathVariable UUID id, @Valid @RequestBody ConfirmClassificationRequest request) {
-        AIClassificationResponse response =
-                aiInsightsService.confirmClassification(id, request.confirmedCategoryId());
+        AIClassificationResponse response = aiInsightsService.confirmClassification(
+                securityUtils.getCurrentUserId(), id, request.confirmedCategoryId());
         return ResponseEntity.ok(ApiResponse.ok(response));
     }
 }

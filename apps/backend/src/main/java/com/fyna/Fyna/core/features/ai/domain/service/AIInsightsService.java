@@ -10,6 +10,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fyna.Fyna.core.exception.BadRequestException;
 import com.fyna.Fyna.core.exception.ResourceNotFoundException;
 import com.fyna.Fyna.core.features.ai.data.repository.AIClassificationRepository;
 import com.fyna.Fyna.core.features.ai.data.repository.InvestmentRecommendationRepository;
@@ -19,6 +20,7 @@ import com.fyna.Fyna.core.features.ai.presentation.dto.AIClassificationResponse;
 import com.fyna.Fyna.core.features.ai.presentation.dto.InvestmentRecommendationResponse;
 import com.fyna.Fyna.core.features.ai.presentation.dto.SpendingPatternResponse;
 import com.fyna.Fyna.core.features.ai.presentation.dto.SpendingPredictionResponse;
+import com.fyna.Fyna.core.features.budgets.domain.service.BudgetService;
 import com.fyna.Fyna.core.features.categories.data.repository.CategoryRepository;
 import com.fyna.Fyna.core.features.transactions.data.repository.TransactionRepository;
 import com.fyna.Fyna.core.shared.domain.AIClassifications;
@@ -27,6 +29,7 @@ import com.fyna.Fyna.core.shared.domain.InvestmentRecommendation;
 import com.fyna.Fyna.core.shared.domain.Transactions;
 import com.fyna.Fyna.core.shared.dto.PageResponse;
 import com.fyna.Fyna.core.shared.enums.SpendingPatternType;
+import com.fyna.Fyna.core.shared.enums.TransactionsType;
 
 @Service
 public class AIInsightsService {
@@ -37,17 +40,19 @@ public class AIInsightsService {
     private final AIClassificationRepository classificationRepository;
     private final CategoryRepository categoryRepository;
     private final TransactionRepository transactionRepository;
+    private final BudgetService budgetService;
 
     public AIInsightsService(InvestmentRecommendationRepository recommendationRepository,
             SpendingPredictionRepository predictionRepository, SpendingPatternRepository patternRepository,
             AIClassificationRepository classificationRepository, CategoryRepository categoryRepository,
-            TransactionRepository transactionRepository) {
+            TransactionRepository transactionRepository, BudgetService budgetService) {
         this.recommendationRepository = recommendationRepository;
         this.predictionRepository = predictionRepository;
         this.patternRepository = patternRepository;
         this.classificationRepository = classificationRepository;
         this.categoryRepository = categoryRepository;
         this.transactionRepository = transactionRepository;
+        this.budgetService = budgetService;
     }
 
     // ================= Investment Recommendations =================
@@ -81,6 +86,9 @@ public class AIInsightsService {
     public InvestmentRecommendationResponse markRecommendationAsFollowed(UUID id, UUID userId) {
         InvestmentRecommendation rec = recommendationRepository.findByIdAndUserId(id, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("InvestmentRecommendation", "id", id));
+        if (Boolean.TRUE.equals(rec.getWasFollowed())) {
+            return InvestmentRecommendationResponse.from(rec);
+        }
         rec.setWasFollowed(true);
         if (!rec.getWasViewed()) {
             rec.setWasViewed(true);
@@ -140,26 +148,64 @@ public class AIInsightsService {
     }
 
     @Transactional(readOnly = true)
-    public AIClassificationResponse getClassificationByTransaction(UUID transactionId) {
+    public AIClassificationResponse getClassificationByTransaction(UUID userId, UUID transactionId) {
         AIClassifications classification = classificationRepository.findByTransactionsId(transactionId)
                 .orElseThrow(() -> new ResourceNotFoundException("AIClassification", "transactionId", transactionId));
+        if (!ownsClassification(classification, userId)) {
+            throw new ResourceNotFoundException("AIClassification", "transactionId", transactionId);
+        }
         return AIClassificationResponse.from(classification);
+    }
+
+    /** Valida que a classificação pertence à transação de {@code userId}. */
+    private boolean ownsClassification(AIClassifications classification, UUID userId) {
+        Transactions tx = classification.getTransactions();
+        return tx != null && tx.getUser() != null && tx.getUser().getId().equals(userId);
     }
 
     /**
      * Confirma ou corrige uma classificação de IA.
-     * - Atualiza ai_classifications (confirmedCategory, wasConfirmed, wasCorrected)
-     * - TAMBÉM atualiza transactions.category_id com a categoria confirmada
+     *
+     * <ul>
+     *   <li>Valida ownership da classificação e da categoria de destino.</li>
+     *   <li>Atualiza {@code ai_classifications} (confirmedCategory, wasConfirmed, wasCorrected).</li>
+     *   <li>Atualiza {@code transactions.category_id} com a categoria confirmada.</li>
+     *   <li>Reconcilia o consumo de orçamento: reverte a categoria anterior (se EXPENSE paga)
+     *       e aplica a nova.</li>
+     * </ul>
      */
     @Transactional
-    public AIClassificationResponse confirmClassification(UUID classificationId, UUID confirmedCategoryId) {
+    public AIClassificationResponse confirmClassification(UUID userId, UUID classificationId, UUID confirmedCategoryId) {
         AIClassifications classification = classificationRepository.findById(classificationId)
                 .orElseThrow(() -> new ResourceNotFoundException("AIClassification", "id", classificationId));
+
+        if (!ownsClassification(classification, userId)) {
+            throw new ResourceNotFoundException("AIClassification", "id", classificationId);
+        }
 
         Categories confirmedCategory = categoryRepository.findById(confirmedCategoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", confirmedCategoryId));
 
+        // Categoria deve ser do sistema ou do próprio usuário
+        if (confirmedCategory.getUser() != null
+                && !confirmedCategory.getUser().getId().equals(userId)) {
+            throw new BadRequestException("Categoria não pertence a este usuário");
+        }
+
+        // O tipo da categoria deve ser compatível com o tipo da transação
+        // (impede que uma despesa seja reclassificada para categoria de receita,
+        // o que distorceria relatórios agrupados por tipo).
+        Transactions txForType = classification.getTransactions();
+        if (txForType != null && confirmedCategory.getType() != null
+                && txForType.getType() != null
+                && !confirmedCategory.getType().name().equals(txForType.getType().name())) {
+            throw new BadRequestException(
+                    "Tipo da categoria (" + confirmedCategory.getType()
+                    + ") incompatível com o tipo da transação (" + txForType.getType() + ")");
+        }
+
         // 1. Atualiza a classificação de IA
+        Categories previous = classification.getConfirmedCategory();
         classification.setConfirmedCategory(confirmedCategory);
         classification.setWasConfirmed(true);
         classification.setConfirmedAt(Instant.now());
@@ -171,11 +217,31 @@ public class AIInsightsService {
 
         classification = classificationRepository.save(classification);
 
-        // 2. Atualiza a transação original com a categoria confirmada
+        // 2. Atualiza a transação original e reconcilia o orçamento
         Transactions transaction = classification.getTransactions();
         if (transaction != null) {
+            Categories oldTxCategory = transaction.getCategories();
+            UUID oldTxCategoryId = oldTxCategory != null ? oldTxCategory.getId() : null;
+
             transaction.setCategories(confirmedCategory);
             transactionRepository.save(transaction);
+
+            boolean countsForBudget = transaction.getType() == TransactionsType.EXPENSE
+                    && Boolean.TRUE.equals(transaction.getIsPaid());
+            if (countsForBudget && (oldTxCategoryId == null
+                    || !oldTxCategoryId.equals(confirmedCategoryId))) {
+                if (oldTxCategoryId != null) {
+                    budgetService.applyTransactionDelta(userId, oldTxCategoryId,
+                            transaction.getAmount().negate(), transaction.getTransactionDate());
+                }
+                budgetService.applyTransactionDelta(userId, confirmedCategoryId,
+                        transaction.getAmount(), transaction.getTransactionDate());
+            }
+        }
+
+        // Evita warning de variável não usada quando a classificação já tinha um confirmedCategory
+        if (previous != null && !previous.getId().equals(confirmedCategoryId)) {
+            classification.setWasCorrected(true);
         }
 
         return AIClassificationResponse.from(classification);

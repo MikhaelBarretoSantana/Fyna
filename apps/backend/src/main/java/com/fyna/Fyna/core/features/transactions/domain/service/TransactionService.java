@@ -1,7 +1,10 @@
 package com.fyna.Fyna.core.features.transactions.domain.service;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 import org.slf4j.Logger;
@@ -11,6 +14,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fyna.Fyna.core.exception.BadRequestException;
 import com.fyna.Fyna.core.exception.ResourceNotFoundException;
 import com.fyna.Fyna.core.features.accounts.data.repository.AccountRepository;
 import com.fyna.Fyna.core.features.ai.infrastructure.AIEngineClient;
@@ -35,14 +39,22 @@ public class TransactionService {
 
     private static final Logger log = LoggerFactory.getLogger(TransactionService.class);
 
-    /** Janela de histórico considerada para o cálculo de média da categoria. */
+    /** Janela de histórico considerada para o cálculo de mediana/MAD da categoria. */
     private static final int ANOMALY_WINDOW_DAYS = 90;
 
     /** Mínimo de transações na janela para considerar o histórico estatisticamente útil. */
-    private static final long ANOMALY_MIN_HISTORY = 5;
+    private static final int ANOMALY_MIN_HISTORY = 5;
 
-    /** Múltiplo da média acima do qual a transação é considerada anômala. */
-    private static final BigDecimal ANOMALY_MULTIPLIER = new BigDecimal("2.0");
+    /**
+     * Limiar Z-robusto: anomalia quando |amount - mediana| / (1.4826 * MAD) >= 3.5.
+     * MAD é resistente a outliers, ao contrário de média + desvio padrão.
+     * 1.4826 converte MAD em estimador consistente do desvio padrão sob normalidade.
+     */
+    private static final double MAD_SCALE = 1.4826;
+    private static final double ROBUST_Z_THRESHOLD = 3.5;
+
+    /** Fallback quando todos os valores da janela são idênticos (MAD=0): usa múltiplo da mediana. */
+    private static final BigDecimal FALLBACK_MULTIPLIER = new BigDecimal("2.0");
 
     private final TransactionRepository transactionRepository;
     private final AccountRepository accountRepository;
@@ -101,7 +113,15 @@ public class TransactionService {
         return TransactionResponse.from(transaction);
     }
 
+    @Transactional
     public TransactionResponse createTransaction(UUID userId, CreateTransactionRequest request) {
+        // Validação de transferência: contas devem ser distintas
+        if (request.type() == TransactionsType.TRANSFER
+                && request.transferAccountId() != null
+                && request.transferAccountId().equals(request.accountId())) {
+            throw new BadRequestException("Conta origem e destino devem ser diferentes em uma transferência");
+        }
+
         // Persiste a transação e atualiza saldo dentro de uma única transação ACID
         Transactions transaction = persistTransaction(userId, request);
 
@@ -111,7 +131,8 @@ public class TransactionService {
                 && Boolean.TRUE.equals(transaction.getIsPaid())
                 && request.categoryId() != null) {
             try {
-                budgetService.updateBudgetSpending(userId, request.categoryId(), request.amount());
+                budgetService.applyTransactionDelta(userId, request.categoryId(),
+                        request.amount(), request.transactionDate());
             } catch (Exception e) {
                 log.warn("Falha ao atualizar consumo de orçamento para tx {}: {}",
                         transaction.getId(), e.getMessage());
@@ -139,10 +160,18 @@ public class TransactionService {
     }
 
     /**
-     * Detecta gasto atípico comparando a transação com a média histórica da mesma
-     * categoria nos últimos {@value #ANOMALY_WINDOW_DAYS} dias.
-     * Exige histórico mínimo ({@value #ANOMALY_MIN_HISTORY} transações) para evitar
-     * falsos positivos quando o usuário ainda tem poucos dados.
+     * Detecta gasto atípico usando estatísticas robustas: mediana + MAD
+     * (Median Absolute Deviation) na janela de {@value #ANOMALY_WINDOW_DAYS} dias.
+     *
+     * <p>Algoritmo: Z-robusto = |amount - mediana| / (1.4826 * MAD). Dispara se Z >= 3.5.
+     * Quando MAD é zero (todos os valores históricos idênticos), cai em fallback
+     * {@code amount >= 2 * mediana} para não silenciar outliers em séries muito estáveis.
+     *
+     * <p>Vantagens vs média+desvio padrão:
+     * <ul>
+     *   <li>Não é arrastado por outliers passados (uma conta de R$10k não inflaciona o threshold).</li>
+     *   <li>50% dos valores precisam ser anômalos para distorcer a mediana — muito mais robusto.</li>
+     * </ul>
      */
     private void maybeFireSpendingAnomaly(UUID userId, Transactions tx) {
         if (tx.getCategories() == null) return;
@@ -150,22 +179,36 @@ public class TransactionService {
         LocalDate end = tx.getTransactionDate();
         LocalDate start = end.minusDays(ANOMALY_WINDOW_DAYS);
 
-        long count = transactionRepository
-                .countByUserIdAndCategoriesIdAndTypeAndTransactionDateBetween(
-                        userId, categoryId, TransactionsType.EXPENSE, start, end);
-        if (count < ANOMALY_MIN_HISTORY) return;
-
-        Double avg = transactionRepository.avgAmountByUserCategoryType(
+        List<BigDecimal> amounts = transactionRepository.findAmountsByUserCategoryType(
                 userId, categoryId, TransactionsType.EXPENSE, start, end);
-        if (avg == null || avg <= 0) return;
+        if (amounts == null || amounts.size() < ANOMALY_MIN_HISTORY) return;
 
-        BigDecimal threshold = BigDecimal.valueOf(avg).multiply(ANOMALY_MULTIPLIER);
-        if (tx.getAmount().compareTo(threshold) < 0) return;
+        // Cópia mutável para sorting
+        List<BigDecimal> sorted = new ArrayList<>(amounts);
+        sorted.sort(BigDecimal::compareTo);
+        BigDecimal median = median(sorted);
+        if (median.signum() <= 0) return;
+
+        BigDecimal mad = medianAbsoluteDeviation(sorted, median);
+        BigDecimal txAmount = tx.getAmount();
+        BigDecimal deviation = txAmount.subtract(median).abs();
+
+        boolean anomalous;
+        if (mad.signum() == 0) {
+            // Série constante: fallback ao múltiplo da mediana
+            anomalous = txAmount.compareTo(median.multiply(FALLBACK_MULTIPLIER)) >= 0;
+        } else {
+            BigDecimal scaledMad = mad.multiply(BigDecimal.valueOf(MAD_SCALE));
+            BigDecimal robustZ = deviation.divide(scaledMad, 4, RoundingMode.HALF_UP);
+            anomalous = robustZ.compareTo(BigDecimal.valueOf(ROBUST_Z_THRESHOLD)) >= 0;
+        }
+        if (!anomalous) return;
 
         String categoryName = tx.getCategories().getName();
         String metadata = String.format(
-                "{\"transactionId\":\"%s\",\"categoryId\":\"%s\",\"amount\":\"%s\",\"avg\":\"%.2f\"}",
-                tx.getId(), categoryId, tx.getAmount().toPlainString(), avg);
+                "{\"transactionId\":\"%s\",\"categoryId\":\"%s\",\"amount\":\"%s\",\"median\":\"%s\",\"mad\":\"%s\"}",
+                tx.getId(), categoryId, txAmount.toPlainString(),
+                median.toPlainString(), mad.toPlainString());
         notificationService.createNotification(
                 userId,
                 NotificationType.SPENDING_ANOMALY,
@@ -176,8 +219,27 @@ public class TransactionService {
         );
     }
 
-    @Transactional
-    protected Transactions persistTransaction(UUID userId, CreateTransactionRequest request) {
+    /** Mediana de uma lista já ordenada (assume não vazia). */
+    private static BigDecimal median(List<BigDecimal> sortedAsc) {
+        int n = sortedAsc.size();
+        int mid = n / 2;
+        if (n % 2 == 1) return sortedAsc.get(mid);
+        BigDecimal lower = sortedAsc.get(mid - 1);
+        BigDecimal upper = sortedAsc.get(mid);
+        return lower.add(upper).divide(BigDecimal.valueOf(2), 4, RoundingMode.HALF_UP);
+    }
+
+    /** MAD = mediana(|xi - mediana|). */
+    private static BigDecimal medianAbsoluteDeviation(List<BigDecimal> sortedAsc, BigDecimal med) {
+        List<BigDecimal> deviations = new ArrayList<>(sortedAsc.size());
+        for (BigDecimal v : sortedAsc) {
+            deviations.add(v.subtract(med).abs());
+        }
+        deviations.sort(BigDecimal::compareTo);
+        return median(deviations);
+    }
+
+    private Transactions persistTransaction(UUID userId, CreateTransactionRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
@@ -221,37 +283,98 @@ public class TransactionService {
         Transactions transaction = transactionRepository.findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", "id", transactionId));
 
-        if (request.description() != null) transaction.setDescription(request.description());
+        // Snapshot do estado antigo (necessário para reverter saldo/budget corretamente)
+        BigDecimal oldAmount = transaction.getAmount();
+        Boolean oldIsPaid = transaction.getIsPaid();
+        LocalDate oldDate = transaction.getTransactionDate();
+        UUID oldCategoryId = transaction.getCategories() != null ? transaction.getCategories().getId() : null;
+        TransactionsType txType = transaction.getType();
+        Transactions pair = transaction.getTransactions();
+
+        if (request.description() != null) {
+            transaction.setDescription(request.description());
+            if (pair != null) pair.setDescription(request.description());
+        }
         if (request.notes() != null) transaction.setNotes(request.notes());
-        if (request.transactionDate() != null) transaction.setTransactionDate(request.transactionDate());
+        if (request.transactionDate() != null) {
+            transaction.setTransactionDate(request.transactionDate());
+            if (pair != null) pair.setTransactionDate(request.transactionDate());
+        }
         if (request.dueDate() != null) transaction.setDueDate(request.dueDate());
         if (request.attachmentUrl() != null) transaction.setAttachmentUrl(request.attachmentUrl());
 
-        if (request.amount() != null) {
-            // Reverter saldo antigo e aplicar novo
-            if (Boolean.TRUE.equals(transaction.getIsPaid())) {
-                reverseAccountBalance(transaction.getAccount(), transaction.getType(), transaction.getAmount());
-                updateAccountBalance(transaction.getAccount(), transaction.getType(), request.amount());
+        BigDecimal newAmount = request.amount() != null ? request.amount() : oldAmount;
+        Boolean newIsPaid = request.isPaid() != null ? request.isPaid() : oldIsPaid;
+
+        boolean amountChanged = request.amount() != null && newAmount.compareTo(oldAmount) != 0;
+        boolean paidChanged = request.isPaid() != null && !newIsPaid.equals(oldIsPaid);
+
+        if (amountChanged || paidChanged) {
+            // Reverte saldo antigo (se pago) — ambos os lados em TRANSFER
+            if (Boolean.TRUE.equals(oldIsPaid)) {
+                reverseAccountBalance(transaction.getAccount(), txType, oldAmount);
+                if (txType == TransactionsType.TRANSFER && pair != null) {
+                    // O par fez o movimento oposto (entrada na conta destino). Reverter:
+                    pair.getAccount().setCurrentBalance(pair.getAccount().getCurrentBalance().subtract(oldAmount));
+                    accountRepository.save(pair.getAccount());
+                }
             }
-            transaction.setAmount(request.amount());
+            // Aplica saldo novo (se pago agora)
+            if (Boolean.TRUE.equals(newIsPaid)) {
+                updateAccountBalance(transaction.getAccount(), txType, newAmount);
+                if (txType == TransactionsType.TRANSFER && pair != null) {
+                    pair.getAccount().setCurrentBalance(pair.getAccount().getCurrentBalance().add(newAmount));
+                    accountRepository.save(pair.getAccount());
+                }
+            }
+            transaction.setAmount(newAmount);
+            transaction.setIsPaid(newIsPaid);
+            if (pair != null) {
+                pair.setAmount(newAmount);
+                pair.setIsPaid(newIsPaid);
+                transactionRepository.save(pair);
+            }
         }
 
-        if (request.isPaid() != null && !request.isPaid().equals(transaction.getIsPaid())) {
-            if (request.isPaid()) {
-                updateAccountBalance(transaction.getAccount(), transaction.getType(), transaction.getAmount());
-            } else {
-                reverseAccountBalance(transaction.getAccount(), transaction.getType(), transaction.getAmount());
-            }
-            transaction.setIsPaid(request.isPaid());
-        }
-
+        UUID newCategoryId = oldCategoryId;
         if (request.categoryId() != null) {
             Categories category = categoryRepository.findById(request.categoryId())
                     .orElseThrow(() -> new ResourceNotFoundException("Category", "id", request.categoryId()));
             transaction.setCategories(category);
+            newCategoryId = category.getId();
         }
 
         transaction = transactionRepository.save(transaction);
+
+        // Reconcilia consumo de orçamento (somente EXPENSE)
+        if (txType == TransactionsType.EXPENSE) {
+            try {
+                // Reverte o que a transação antiga contribuía (se contribuía)
+                if (Boolean.TRUE.equals(oldIsPaid) && oldCategoryId != null) {
+                    budgetService.applyTransactionDelta(userId, oldCategoryId, oldAmount.negate(), oldDate);
+                }
+                // Aplica o que a transação nova passa a contribuir
+                if (Boolean.TRUE.equals(newIsPaid) && newCategoryId != null) {
+                    budgetService.applyTransactionDelta(userId, newCategoryId, newAmount, transaction.getTransactionDate());
+                }
+            } catch (Exception e) {
+                log.warn("Falha ao reconciliar orçamento na atualização da tx {}: {}",
+                        transaction.getId(), e.getMessage());
+            }
+
+            // Reavalia anomalia se houve mudança relevante (valor, categoria ou virou pago)
+            boolean categoryChanged = newCategoryId != null && !newCategoryId.equals(oldCategoryId);
+            boolean becamePaid = Boolean.TRUE.equals(newIsPaid) && !Boolean.TRUE.equals(oldIsPaid);
+            if (Boolean.TRUE.equals(newIsPaid) && (amountChanged || categoryChanged || becamePaid)) {
+                try {
+                    maybeFireSpendingAnomaly(userId, transaction);
+                } catch (Exception e) {
+                    log.warn("Falha ao avaliar anomalia na atualização da tx {}: {}",
+                            transaction.getId(), e.getMessage());
+                }
+            }
+        }
+
         return TransactionResponse.from(transaction);
     }
 
@@ -260,9 +383,39 @@ public class TransactionService {
         Transactions transaction = transactionRepository.findByIdAndUserId(transactionId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Transaction", "id", transactionId));
 
-        // Reverter saldo se paga
-        if (Boolean.TRUE.equals(transaction.getIsPaid())) {
-            reverseAccountBalance(transaction.getAccount(), transaction.getType(), transaction.getAmount());
+        Transactions pair = transaction.getTransactions();
+        TransactionsType txType = transaction.getType();
+        boolean isPaid = Boolean.TRUE.equals(transaction.getIsPaid());
+
+        // Reverter saldo (ambos os lados em TRANSFER)
+        if (isPaid) {
+            reverseAccountBalance(transaction.getAccount(), txType, transaction.getAmount());
+            if (txType == TransactionsType.TRANSFER && pair != null) {
+                pair.getAccount().setCurrentBalance(pair.getAccount().getCurrentBalance().subtract(transaction.getAmount()));
+                accountRepository.save(pair.getAccount());
+            }
+        }
+
+        // Reverter consumo de orçamento
+        if (txType == TransactionsType.EXPENSE && isPaid && transaction.getCategories() != null) {
+            try {
+                budgetService.applyTransactionDelta(userId,
+                        transaction.getCategories().getId(),
+                        transaction.getAmount().negate(),
+                        transaction.getTransactionDate());
+            } catch (Exception e) {
+                log.warn("Falha ao reverter orçamento na exclusão da tx {}: {}",
+                        transaction.getId(), e.getMessage());
+            }
+        }
+
+        // Remover o par primeiro, quebrando o vínculo circular
+        if (pair != null) {
+            transaction.setTransactions(null);
+            pair.setTransactions(null);
+            transactionRepository.save(transaction);
+            transactionRepository.save(pair);
+            transactionRepository.delete(pair);
         }
 
         transactionRepository.delete(transaction);
@@ -273,21 +426,27 @@ public class TransactionService {
         return transactionRepository.sumByUserIdAndTypeAndDateBetween(userId, type, startDate, endDate);
     }
 
+    /**
+     * Aplica o movimento da transação na conta passada.
+     * Para TRANSFER, trata a {@code account} como conta de SAÍDA (origem da perna);
+     * a contrapartida no destino é responsabilidade do chamador.
+     */
     private void updateAccountBalance(Accounts account, TransactionsType type, BigDecimal amount) {
         BigDecimal currentBalance = account.getCurrentBalance();
         if (type == TransactionsType.INCOME) {
             account.setCurrentBalance(currentBalance.add(amount));
-        } else if (type == TransactionsType.EXPENSE) {
+        } else if (type == TransactionsType.EXPENSE || type == TransactionsType.TRANSFER) {
             account.setCurrentBalance(currentBalance.subtract(amount));
         }
         accountRepository.save(account);
     }
 
+    /** Inverso de {@link #updateAccountBalance}. Mesma convenção para TRANSFER. */
     private void reverseAccountBalance(Accounts account, TransactionsType type, BigDecimal amount) {
         BigDecimal currentBalance = account.getCurrentBalance();
         if (type == TransactionsType.INCOME) {
             account.setCurrentBalance(currentBalance.subtract(amount));
-        } else if (type == TransactionsType.EXPENSE) {
+        } else if (type == TransactionsType.EXPENSE || type == TransactionsType.TRANSFER) {
             account.setCurrentBalance(currentBalance.add(amount));
         }
         accountRepository.save(account);
@@ -313,12 +472,9 @@ public class TransactionService {
         sourceTransaction.setTransactions(pairTransaction);
         transactionRepository.save(sourceTransaction);
 
-        // Atualizar saldos: saída da conta origem, entrada na conta destino
+        // Atualizar saldo do DESTINO. A perna de saída já foi tratada por
+        // updateAccountBalance(source, TRANSFER, amount) em persistTransaction.
         if (Boolean.TRUE.equals(pairTransaction.getIsPaid())) {
-            Accounts sourceAccount = sourceTransaction.getAccount();
-            sourceAccount.setCurrentBalance(sourceAccount.getCurrentBalance().subtract(request.amount()));
-            accountRepository.save(sourceAccount);
-
             targetAccount.setCurrentBalance(targetAccount.getCurrentBalance().add(request.amount()));
             accountRepository.save(targetAccount);
         }

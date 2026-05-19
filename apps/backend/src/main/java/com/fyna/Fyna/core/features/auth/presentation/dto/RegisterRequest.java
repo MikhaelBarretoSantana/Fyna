@@ -4,6 +4,7 @@ import java.time.LocalDate;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public record RegisterRequest(
@@ -16,8 +17,15 @@ public record RegisterRequest(
         @Size(max = 255, message = "Email deve ter no máximo 255 caracteres")
         String email,
 
+        // Exige no mínimo 8 caracteres, com pelo menos uma letra e um dígito.
+        // O padrão é intencionalmente acessível: rejeita "12345678" e "password",
+        // mas não obriga simbolos especiais para não atrapalhar onboarding.
         @NotBlank(message = "Senha é obrigatória")
-        @Size(min = 6, max = 100, message = "Senha deve ter entre 6 e 100 caracteres")
+        @Size(min = 8, max = 100, message = "Senha deve ter entre 8 e 100 caracteres")
+        @Pattern(
+                regexp = "^(?=.*[A-Za-z])(?=.*\\d).{8,100}$",
+                message = "Senha deve conter pelo menos uma letra e um dígito"
+        )
         String password,
 
         @NotBlank(message = "Nome completo é obrigatório")
