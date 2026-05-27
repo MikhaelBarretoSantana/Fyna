@@ -123,7 +123,7 @@ class _RegisterStepPersonalState extends State<RegisterStepPersonal> {
 
           const SizedBox(height: 16),
 
-          // Birth date
+          // Birth date — validação espelha o backend: idade >= 18.
           _buildGlassTextField(
             controller: _birthDateDisplayController,
             hintText: 'Data de nascimento',
@@ -135,6 +135,23 @@ class _RegisterStepPersonalState extends State<RegisterStepPersonal> {
               color: ThemeColors.of(context).textTertiary,
               size: 20,
             ),
+            validator: (_) {
+              final birth = widget.selectedBirthDate;
+              if (birth == null) return null; // opcional
+              final today = DateTime.now();
+              if (birth.isAfter(today)) {
+                return 'Data não pode estar no futuro';
+              }
+              var years = today.year - birth.year;
+              if (today.month < birth.month ||
+                  (today.month == birth.month && today.day < birth.day)) {
+                years--;
+              }
+              if (years < 18) {
+                return 'É necessário ter pelo menos 18 anos';
+              }
+              return null;
+            },
           ),
 
           const SizedBox(height: 32),

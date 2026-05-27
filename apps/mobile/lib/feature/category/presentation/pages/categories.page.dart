@@ -1,10 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fyna/config/injection/injection.dart';
-import 'package:fyna/core/constants/app_colors.dart';
 import 'package:fyna/core/enums/category_type.dart';
+import 'package:fyna/core/enums/transaction_type.dart';
 import 'package:fyna/core/errors/exceptions.dart';
+import 'package:fyna/core/themes/theme_colors.dart';
+import 'package:fyna/core/widgets/app_list_item.dart';
+import 'package:fyna/core/widgets/app_pill_tabs.dart';
+import 'package:fyna/core/widgets/app_screen_header.dart';
+import 'package:fyna/core/widgets/hero_gradient_card.dart';
+import 'package:fyna/core/widgets/icon_badge.dart';
 import 'package:fyna/feature/category/domain/entities/category_entity.dart';
+import 'package:fyna/feature/transaction/domain/entities/transaction_entity.dart';
+import 'package:intl/intl.dart';
 
 class CategoriesPage extends StatefulWidget {
   const CategoriesPage({super.key});
@@ -13,60 +21,54 @@ class CategoriesPage extends StatefulWidget {
   State<CategoriesPage> createState() => _CategoriesPageState();
 }
 
-class _CategoriesPageState extends State<CategoriesPage>
-    with SingleTickerProviderStateMixin {
-  bool get isDark => Theme.of(context).brightness == Brightness.dark;
+class _CategoriesPageState extends State<CategoriesPage> {
+  int _selectedFilter = 0; // 0=Receitas, 1=Despesas, 2=Transferências
 
-  late TabController _tabController;
-
-  // ─── Dados da API ───
   List<CategoryEntity> _categories = [];
+  List<TransactionEntity> _transactions = [];
   bool _isLoading = true;
   String? _errorMessage;
 
-  // ─── Cores disponíveis para criar/editar ───
-  static const List<Map<String, dynamic>> _colorOptions = [
-    {'hex': '#1A7B8C', 'color': Color(0xFF1A7B8C)},
-    {'hex': '#0D4F6E', 'color': Color(0xFF0D4F6E)},
-    {'hex': '#2BA3A8', 'color': Color(0xFF2BA3A8)},
-    {'hex': '#00D4AA', 'color': Color(0xFF00D4AA)},
-    {'hex': '#FF6B6B', 'color': Color(0xFFFF6B6B)},
-    {'hex': '#FFB300', 'color': Color(0xFFFFB300)},
-    {'hex': '#7C83FD', 'color': Color(0xFF7C83FD)},
-    {'hex': '#FF9800', 'color': Color(0xFFFF9800)},
-    {'hex': '#E91E63', 'color': Color(0xFFE91E63)},
-    {'hex': '#4CAF50', 'color': Color(0xFF4CAF50)},
+  static const List<String> _colorOptions = [
+    '#1A6F82',
+    '#0E3D4A',
+    '#2BA3A8',
+    '#12A892',
+    '#E85D4A',
+    '#E89A2E',
+    '#7C5CFC',
+    '#FF9800',
+    '#E91E63',
+    '#4CAF50',
   ];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) setState(() {});
-    });
-    _loadCategories();
+    _loadAll();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  // ─── Carregamento ───
-  Future<void> _loadCategories() async {
+  Future<void> _loadAll() async {
     setState(() {
       _isLoading = true;
       _errorMessage = null;
     });
-
     try {
-      final categories =
-          await Injection.instance.categoryRepository.getCategories();
+      final now = DateTime.now();
+      final results = await Future.wait([
+        Injection.instance.categoryRepository.getCategories(),
+        Injection.instance.transactionRepository.getTransactions(
+          page: 0,
+          size: 200,
+          startDate: DateTime(now.year, now.month, 1),
+          endDate: DateTime(now.year, now.month + 1, 0),
+        ),
+      ]);
       if (mounted) {
         setState(() {
-          _categories = categories;
+          _categories = results[0] as List<CategoryEntity>;
+          _transactions =
+              (results[1] as dynamic).content as List<TransactionEntity>;
           _isLoading = false;
         });
       }
@@ -94,10 +96,35 @@ class _CategoriesPageState extends State<CategoriesPage>
     }
   }
 
-  // ─── Filtro por tipo ───
-  List<CategoryEntity> _filteredByType(CategoryType type) {
-    final list = _categories.where((c) => c.type == type).toList();
-    // Sistema primeiro, depois customizadas, ordenadas por displayOrder
+  CategoryType get _currentType {
+    // Ordem visual da pill: Receita (0), Despesa (1), Transferência (2).
+    switch (_selectedFilter) {
+      case 0:
+        return CategoryType.income;
+      case 2:
+        return CategoryType.transfer;
+      case 1:
+      default:
+        return CategoryType.expense;
+    }
+  }
+
+  TransactionType get _matchingTransactionType {
+    switch (_currentType) {
+      case CategoryType.income:
+        return TransactionType.income;
+      case CategoryType.transfer:
+        return TransactionType.transfer;
+      case CategoryType.expense:
+        return TransactionType.expense;
+    }
+  }
+
+  /// Categorias raiz (sem parentId) do tipo selecionado.
+  List<CategoryEntity> get _rootCategories {
+    final list = _categories
+        .where((c) => c.type == _currentType && c.parentId == null)
+        .toList();
     list.sort((a, b) {
       if (a.isSystem && !b.isSystem) return -1;
       if (!a.isSystem && b.isSystem) return 1;
@@ -106,30 +133,332 @@ class _CategoriesPageState extends State<CategoriesPage>
     return list;
   }
 
-  CategoryType get _currentType {
-    switch (_tabController.index) {
-      case 1:
-        return CategoryType.income;
-      case 2:
-        return CategoryType.transfer;
-      default:
-        return CategoryType.expense;
+  int _subCount(String parentId) {
+    return _categories.where((c) => c.parentId == parentId).length;
+  }
+
+  double _totalForCategory(String categoryId) {
+    return _transactions
+        .where((t) =>
+            t.type == _matchingTransactionType &&
+            (t.categoryId == categoryId))
+        .fold(0.0, (s, t) => s + t.amount);
+  }
+
+  double get _totalSpent {
+    return _transactions
+        .where((t) => t.type == _matchingTransactionType)
+        .fold(0.0, (s, t) => s + t.amount);
+  }
+
+  int get _activeCount =>
+      _categories.where((c) => c.type == _currentType).length;
+
+  int get _subCountTotal => _categories
+      .where((c) => c.type == _currentType && c.parentId != null)
+      .length;
+
+  String get _monthLabel {
+    return toBeginningOfSentenceCase(
+            DateFormat('MMMM', 'pt_BR').format(DateTime.now())) ??
+        'Mês';
+  }
+
+  String _fmtCurrency(double v) {
+    final f = v.abs().toStringAsFixed(2).replaceAll('.', ',');
+    final p = f.split(',');
+    final i = p[0].replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    return 'R\$ $i,${p[1]}';
+  }
+
+  String _fmtShort(double v) {
+    if (v.abs() >= 1000000) {
+      return 'R\$ ${(v / 1000000).toStringAsFixed(1)}M';
+    }
+    if (v.abs() >= 1000) {
+      return 'R\$ ${(v / 1000).toStringAsFixed(1)}K';
+    }
+    return _fmtCurrency(v);
+  }
+
+  void _showSnackBar(String message, {bool isError = true}) {
+    if (!mounted) return;
+    final tc = ThemeColors.of(context);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: isError ? tc.neoNegative : tc.neoPositive,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.all(16),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  Future<void> _deleteCategory(CategoryEntity category) async {
+    final confirmed = await _confirmDelete(category);
+    if (confirmed != true) return;
+    try {
+      await Injection.instance.categoryRepository.deleteCategory(category.id);
+      if (mounted) {
+        setState(() => _categories.removeWhere((c) => c.id == category.id));
+        _showSnackBar('Categoria "${category.name}" excluída', isError: false);
+      }
+    } on ServerException catch (e) {
+      _showSnackBar(e.message);
+    } catch (_) {
+      _showSnackBar('Erro ao excluir categoria');
     }
   }
 
-  // ─── Ações ───
-  Future<void> _createCategory({
+  Future<bool?> _confirmDelete(CategoryEntity category) {
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        final tc = ThemeColors.of(ctx);
+        return AlertDialog(
+          backgroundColor: tc.neoCardElevated,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: IconBadge(
+            icon: Icons.delete_outline_rounded,
+            tone: 'danger',
+            size: 56,
+            iconSize: 26,
+            radius: 16,
+          ),
+          title: Text(
+            'Excluir categoria?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: tc.neoText,
+            ),
+          ),
+          content: Text(
+            'A categoria "${category.name}" será desativada. '
+            'Transações vinculadas não serão afetadas.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: tc.neoTextMuted,
+              height: 1.5,
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(
+                  color: tc.neoTextMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: tc.neoNegative,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text('Excluir',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showCreateSheet({CategoryEntity? editing}) {
+    HapticFeedback.mediumImpact();
+    final nameController = TextEditingController(text: editing?.name ?? '');
+    String selectedColor = editing?.color ?? _colorOptions.first;
+    final typeJson = editing != null ? editing.type.toJson() : _currentType.toJson();
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final tc = ThemeColors.of(ctx);
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(ctx).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                decoration: BoxDecoration(
+                  color: tc.neoCardElevated,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: tc.neoTextFaint.withValues(alpha: 0.4),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Text(
+                      editing != null ? 'Editar categoria' : 'Nova categoria',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: tc.neoText,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Nome',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: tc.neoTextFaint,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    TextField(
+                      controller: nameController,
+                      autofocus: editing == null,
+                      decoration: InputDecoration(
+                        hintText: 'Ex.: Mercado',
+                        filled: true,
+                        fillColor: tc.neoCard,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 14, vertical: 14),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: tc.neoCardBorder),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: tc.neoCardBorder),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: tc.neoTeal, width: 1.5),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Cor',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                        color: tc.neoTextFaint,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 10,
+                      runSpacing: 10,
+                      children: _colorOptions.map((hex) {
+                        final color = _hexToColor(hex);
+                        final selected = hex == selectedColor;
+                        return GestureDetector(
+                          onTap: () => setSheetState(() => selectedColor = hex),
+                          child: Container(
+                            width: 38,
+                            height: 38,
+                            decoration: BoxDecoration(
+                              color: color,
+                              borderRadius: BorderRadius.circular(12),
+                              border: selected
+                                  ? Border.all(
+                                      color: tc.neoText, width: 2.5)
+                                  : null,
+                            ),
+                            child: selected
+                                ? const Icon(Icons.check_rounded,
+                                    color: Colors.white, size: 18)
+                                : null,
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 22),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          final name = nameController.text.trim();
+                          if (name.isEmpty) {
+                            _showSnackBar('Informe um nome');
+                            return;
+                          }
+                          Navigator.pop(ctx);
+                          if (editing != null) {
+                            await _update(
+                              id: editing.id,
+                              name: name,
+                              color: selectedColor,
+                            );
+                          } else {
+                            await _create(
+                              name: name,
+                              type: typeJson,
+                              color: selectedColor,
+                            );
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: tc.neoTeal,
+                          foregroundColor: Colors.white,
+                          minimumSize: const Size(0, 50),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                          textStyle: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: Text(editing != null ? 'Salvar' : 'Criar'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _create({
     required String name,
     required String type,
-    String? icon,
-    String? color,
+    required String color,
   }) async {
     try {
       final created =
           await Injection.instance.categoryRepository.createCategory(
         name: name,
         type: type,
-        icon: icon,
         color: color,
       );
       if (mounted) {
@@ -138,17 +467,14 @@ class _CategoriesPageState extends State<CategoriesPage>
       }
     } on ServerException catch (e) {
       _showSnackBar(e.message);
-    } on NetworkException {
-      _showSnackBar('Sem conexão com a internet');
     } catch (_) {
       _showSnackBar('Erro ao criar categoria');
     }
   }
 
-  Future<void> _updateCategory({
+  Future<void> _update({
     required String id,
     String? name,
-    String? icon,
     String? color,
   }) async {
     try {
@@ -156,7 +482,6 @@ class _CategoriesPageState extends State<CategoriesPage>
           await Injection.instance.categoryRepository.updateCategory(
         id: id,
         name: name,
-        icon: icon,
         color: color,
       );
       if (mounted) {
@@ -173,1244 +498,502 @@ class _CategoriesPageState extends State<CategoriesPage>
     }
   }
 
-  Future<void> _deleteCategory(CategoryEntity category) async {
-    final confirmed = await _showDeleteConfirmation(category);
-    if (confirmed != true) return;
-
-    try {
-      await Injection.instance.categoryRepository.deleteCategory(category.id);
-      if (mounted) {
-        setState(() => _categories.removeWhere((c) => c.id == category.id));
-        _showSnackBar('Categoria "${category.name}" excluída', isError: false);
-      }
-    } on ServerException catch (e) {
-      _showSnackBar(e.message);
-    } on NetworkException {
-      _showSnackBar('Sem conexão com a internet');
-    } catch (_) {
-      _showSnackBar('Erro ao excluir categoria');
-    }
-  }
-
-  Future<bool?> _showDeleteConfirmation(CategoryEntity category) {
-    return showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1C1C2E) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        icon: Container(
-          width: 56,
-          height: 56,
-          decoration: BoxDecoration(
-            color: AppColors.error.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: const Icon(Icons.delete_outline_rounded,
-              color: AppColors.error, size: 28),
-        ),
-        title: Text(
-          'Excluir categoria?',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w700,
-            color: isDark ? Colors.white : AppColors.textPrimary,
-          ),
-        ),
-        content: Text(
-          'A categoria "${category.name}" será desativada. '
-          'Transações vinculadas não serão afetadas.',
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 14,
-            color: isDark ? Colors.white60 : AppColors.textSecondary,
-            height: 1.5,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text('Cancelar',
-                style: TextStyle(
-                  color: isDark ? Colors.white54 : AppColors.textTertiary,
-                  fontWeight: FontWeight.w600,
-                )),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.error,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              elevation: 0,
-            ),
-            child: const Text('Excluir',
-                style: TextStyle(fontWeight: FontWeight.w600)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showSnackBar(String message, {bool isError = true}) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: isError ? AppColors.error : AppColors.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════
-  //  BOTTOM SHEETS
-  // ═══════════════════════════════════════════════
-
-  void _showCreateSheet() {
-    HapticFeedback.mediumImpact();
-    final nameController = TextEditingController();
-    String selectedColor = '#1A7B8C';
-    String selectedIcon = 'category';
-    final type = _currentType;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom),
-              child: Container(
-                padding: EdgeInsets.fromLTRB(
-                    20,
-                    14,
-                    20,
-                    MediaQuery.of(ctx).padding.bottom > 0 ? 12 : 28),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF14142A) : Colors.white,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Drag handle
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white24 : Colors.black12,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Nova categoria',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      'Tipo: ${_typeLabel(type)}',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white38 : Colors.black38,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // Preview
-                    Center(
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: _parseColor(selectedColor)
-                              .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(
-                          _getCategoryIcon(selectedIcon),
-                          color: _parseColor(selectedColor),
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    // Nome
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Nome da categoria',
-                        hintStyle: TextStyle(
-                          color: isDark ? Colors.white24 : Colors.black26,
-                        ),
-                        filled: true,
-                        fillColor: isDark
-                            ? const Color(0xFF1C1C2E)
-                            : const Color(0xFFF5F5F8),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Cor
-                    Text(
-                      'Cor',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white54 : Colors.black54,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: _colorOptions.map((opt) {
-                        final hex = opt['hex'] as String;
-                        final color = opt['color'] as Color;
-                        final isSelected = selectedColor == hex;
-                        return GestureDetector(
-                          onTap: () =>
-                              setSheetState(() => selectedColor = hex),
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(10),
-                              border: isSelected
-                                  ? Border.all(color: Colors.white, width: 2.5)
-                                  : null,
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                        color: color.withValues(alpha: 0.4),
-                                        blurRadius: 8,
-                                      )
-                                    ]
-                                  : null,
-                            ),
-                            child: isSelected
-                                ? const Icon(Icons.check_rounded,
-                                    color: Colors.white, size: 18)
-                                : null,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 16),
-                    // Ícone
-                    Text(
-                      'Ícone',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white54 : Colors.black54,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _buildIconSelector(
-                      selectedIcon: selectedIcon,
-                      selectedColor: selectedColor,
-                      onChanged: (icon) =>
-                          setSheetState(() => selectedIcon = icon),
-                    ),
-                    const SizedBox(height: 24),
-                    // Botão criar
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          final name = nameController.text.trim();
-                          if (name.isEmpty) {
-                            _showSnackBar('Informe o nome da categoria');
-                            return;
-                          }
-                          Navigator.pop(ctx);
-                          _createCategory(
-                            name: name,
-                            type: type.toJson(),
-                            icon: selectedIcon,
-                            color: selectedColor,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? AppColors.darkAccent
-                              : AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: const Text('Criar categoria',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showEditSheet(CategoryEntity category) {
-    HapticFeedback.mediumImpact();
-    final nameController = TextEditingController(text: category.name);
-    String selectedColor = category.color ?? '#1A7B8C';
-    String selectedIcon = category.icon ?? 'category';
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                  bottom: MediaQuery.of(ctx).viewInsets.bottom),
-              child: Container(
-                padding: EdgeInsets.fromLTRB(
-                    20,
-                    14,
-                    20,
-                    MediaQuery.of(ctx).padding.bottom > 0 ? 12 : 28),
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF14142A) : Colors.white,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: isDark ? Colors.white24 : Colors.black12,
-                          borderRadius: BorderRadius.circular(2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Editar categoria',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Center(
-                      child: Container(
-                        width: 56,
-                        height: 56,
-                        decoration: BoxDecoration(
-                          color: _parseColor(selectedColor)
-                              .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(16),
-                        ),
-                        child: Icon(
-                          _getCategoryIcon(selectedIcon),
-                          color: _parseColor(selectedColor),
-                          size: 28,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: nameController,
-                      autofocus: true,
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
-                      decoration: InputDecoration(
-                        hintText: 'Nome da categoria',
-                        hintStyle: TextStyle(
-                          color: isDark ? Colors.white24 : Colors.black26,
-                        ),
-                        filled: true,
-                        fillColor: isDark
-                            ? const Color(0xFF1C1C2E)
-                            : const Color(0xFFF5F5F8),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide.none,
-                        ),
-                        contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 14),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Cor',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white54 : Colors.black54,
-                        )),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 10,
-                      runSpacing: 10,
-                      children: _colorOptions.map((opt) {
-                        final hex = opt['hex'] as String;
-                        final color = opt['color'] as Color;
-                        final isSelected = selectedColor == hex;
-                        return GestureDetector(
-                          onTap: () =>
-                              setSheetState(() => selectedColor = hex),
-                          child: Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              color: color,
-                              borderRadius: BorderRadius.circular(10),
-                              border: isSelected
-                                  ? Border.all(color: Colors.white, width: 2.5)
-                                  : null,
-                              boxShadow: isSelected
-                                  ? [
-                                      BoxShadow(
-                                          color: color.withValues(alpha: 0.4),
-                                          blurRadius: 8)
-                                    ]
-                                  : null,
-                            ),
-                            child: isSelected
-                                ? const Icon(Icons.check_rounded,
-                                    color: Colors.white, size: 18)
-                                : null,
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 16),
-                    Text('Ícone',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white54 : Colors.black54,
-                        )),
-                    const SizedBox(height: 8),
-                    _buildIconSelector(
-                      selectedIcon: selectedIcon,
-                      selectedColor: selectedColor,
-                      onChanged: (icon) =>
-                          setSheetState(() => selectedIcon = icon),
-                    ),
-                    const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 50,
-                      child: ElevatedButton(
-                        onPressed: () {
-                          final name = nameController.text.trim();
-                          if (name.isEmpty) {
-                            _showSnackBar('Informe o nome da categoria');
-                            return;
-                          }
-                          Navigator.pop(ctx);
-                          _updateCategory(
-                            id: category.id,
-                            name: name,
-                            icon: selectedIcon,
-                            color: selectedColor,
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: isDark
-                              ? AppColors.darkAccent
-                              : AppColors.primary,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14)),
-                          elevation: 0,
-                        ),
-                        child: const Text('Salvar',
-                            style: TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.w600)),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  // ─── Ações na categoria (long press) ───
-  void _showCategoryActions(CategoryEntity category) {
-    if (category.isSystem) return; // Sistema não tem ações
-    HapticFeedback.mediumImpact();
-    final catColor = _parseColor(category.color);
-
+  void _showActions(CategoryEntity category) {
+    if (category.isSystem) return;
+    HapticFeedback.lightImpact();
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final bottomPadding = MediaQuery.of(ctx).padding.bottom;
-        return Container(
-          padding:
-              EdgeInsets.fromLTRB(20, 14, 20, bottomPadding > 0 ? 12 : 28),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF14142A) : Colors.white,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: catColor.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Icon(_getCategoryIcon(category.icon),
-                        color: catColor, size: 22),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    category.name,
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              _buildActionTile(
-                icon: Icons.edit_rounded,
-                label: 'Editar categoria',
-                color: isDark ? AppColors.darkAccent : AppColors.primary,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _showEditSheet(category);
-                },
-              ),
-              const SizedBox(height: 8),
-              _buildActionTile(
-                icon: Icons.delete_outline_rounded,
-                label: 'Excluir categoria',
-                color: AppColors.error,
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _deleteCategory(category);
-                },
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildActionTile({
-    required IconData icon,
-    required String label,
-    required Color color,
-    required VoidCallback onTap,
-  }) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: isDark ? 0.06 : 0.03),
-            borderRadius: BorderRadius.circular(12),
-            border:
-                Border.all(color: color.withValues(alpha: isDark ? 0.15 : 0.1)),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, color: color, size: 22),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(label,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
-                    )),
-              ),
-              Icon(Icons.chevron_right_rounded,
-                  color: isDark ? Colors.white24 : Colors.black26, size: 22),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════════════
-  //  BUILD
-  // ═══════════════════════════════════════════════
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A14) : const Color(0xFFF5F5F8),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(),
-            const SizedBox(height: 12),
-            // Resumo
-            if (!_isLoading) _buildSummaryRow(),
-            if (!_isLoading) const SizedBox(height: 16),
-            _buildTabBar(),
-            const SizedBox(height: 4),
-            if (_errorMessage != null && !_isLoading) _buildErrorBanner(),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildCategoryList(CategoryType.expense),
-                  _buildCategoryList(CategoryType.income),
-                  _buildCategoryList(CategoryType.transfer),
-                ],
-              ),
+        final tc = ThemeColors.of(ctx);
+        return SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            decoration: BoxDecoration(
+              color: tc.neoCardElevated,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
             ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── Header ───
-  Widget _buildHeader() {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      child: Row(
-        children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1C1C2E)
-                    : const Color(0xFFEEEEF2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(Icons.arrow_back_rounded,
-                  size: 20,
-                  color: isDark ? Colors.white70 : Colors.black54),
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Categorias',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : AppColors.textPrimary,
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: tc.neoTextFaint.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(2),
                   ),
                 ),
-                if (!_isLoading)
-                  Text(
-                    '${_categories.length} categorias · ${_categories.where((c) => c.isSystem).length} do sistema',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white38 : Colors.black38,
-                    ),
+                const SizedBox(height: 18),
+                AppListItem(
+                  leading: const IconBadge(
+                    icon: Icons.edit_rounded,
+                    tone: 'info',
                   ),
+                  title: 'Editar',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _showCreateSheet(editing: category);
+                  },
+                ),
+                const SizedBox(height: 8),
+                AppListItem(
+                  leading: const IconBadge(
+                    icon: Icons.delete_outline_rounded,
+                    tone: 'danger',
+                  ),
+                  title: 'Excluir',
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    _deleteCategory(category);
+                  },
+                ),
               ],
             ),
           ),
-          GestureDetector(
-            onTap: _showCreateSheet,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark ? AppColors.darkAccent : AppColors.primary,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add_rounded, color: Colors.white, size: 18),
-                  SizedBox(width: 4),
-                  Text('Nova',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      )),
-                ],
+        );
+      },
+    );
+  }
+
+  Color _hexToColor(String hex) {
+    final cleaned = hex.replaceAll('#', '');
+    if (cleaned.length != 6) return const Color(0xFF1A6F82);
+    final value = int.tryParse(cleaned, radix: 16);
+    if (value == null) return const Color(0xFF1A6F82);
+    return Color(0xFF000000 | value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final roots = _rootCategories;
+
+    return Scaffold(
+      backgroundColor: tc.neoBackground,
+      body: SafeArea(
+        child: Column(
+          children: [
+            AppScreenHeader(
+              title: 'Categorias',
+              subtitle:
+                  '$_activeCount ${_activeCount == 1 ? 'ativa' : 'ativas'} · $_subCountTotal subcategorias',
+              actions: [
+                HeaderActionButton(
+                  icon: Icons.add_rounded,
+                  onTap: () => _showCreateSheet(),
+                  tooltip: 'Nova categoria',
+                ),
+              ],
+            ),
+            AppPillTabs(
+              labels: const ['Receitas', 'Despesas', 'Transferências'],
+              selectedIndex: _selectedFilter,
+              onChanged: (i) => setState(() => _selectedFilter = i),
+            ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: RefreshIndicator(
+                onRefresh: _loadAll,
+                color: tc.neoTeal,
+                child: _isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(color: tc.neoTeal),
+                      )
+                    : _errorMessage != null
+                        ? _buildError(tc)
+                        : SingleChildScrollView(
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding:
+                                const EdgeInsets.fromLTRB(20, 0, 20, 32),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _buildHero(tc, roots),
+                                const SizedBox(height: 16),
+                                if (roots.isEmpty)
+                                  _buildEmpty(tc)
+                                else
+                                  GridView.builder(
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    gridDelegate:
+                                        const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      mainAxisSpacing: 12,
+                                      crossAxisSpacing: 12,
+                                      childAspectRatio: 1.05,
+                                    ),
+                                    itemCount: roots.length,
+                                    itemBuilder: (_, i) {
+                                      final c = roots[i];
+                                      return _CategoryGridCard(
+                                        category: c,
+                                        subCount: _subCount(c.id),
+                                        amount: _totalForCategory(c.id),
+                                        onTap: () => _showActions(c),
+                                      );
+                                    },
+                                  ),
+                              ],
+                            ),
+                          ),
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Resumo por tipo ───
-  Widget _buildSummaryRow() {
-    final expense = _categories.where((c) => c.type == CategoryType.expense).length;
-    final income = _categories.where((c) => c.type == CategoryType.income).length;
-    final transfer = _categories.where((c) => c.type == CategoryType.transfer).length;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-              child: _buildSummaryChip('Despesas', expense, AppColors.error)),
-          const SizedBox(width: 8),
-          Expanded(
-              child:
-                  _buildSummaryChip('Receitas', income, AppColors.success)),
-          const SizedBox(width: 8),
-          Expanded(
-              child:
-                  _buildSummaryChip('Transf.', transfer, AppColors.info)),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSummaryChip(String label, int count, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14142A) : Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: color.withValues(alpha: isDark ? 0.15 : 0.1),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHero(ThemeColors tc, List<CategoryEntity> roots) {
+    // Top 3 categorias por gasto, ordenadas
+    final entries = roots
+        .map((c) => MapEntry(c, _totalForCategory(c.id)))
+        .where((e) => e.value > 0)
+        .toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    final top3 = entries.take(3).toList();
+
+    return HeroGradientCard(
+      padding: const EdgeInsets.fromLTRB(22, 20, 22, 20),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
-          ),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 11,
-              color: isDark ? Colors.white38 : Colors.black38,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Tab bar ───
-  Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C2E) : const Color(0xFFEEEEF2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: isDark ? AppColors.darkAccent : AppColors.primary,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        dividerColor: Colors.transparent,
-        labelColor: Colors.white,
-        unselectedLabelColor: isDark ? Colors.white38 : Colors.black45,
-        labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-        unselectedLabelStyle:
-            const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
-        padding: const EdgeInsets.all(3),
-        tabs: const [
-          Tab(text: 'Despesas', height: 38),
-          Tab(text: 'Receitas', height: 38),
-          Tab(text: 'Transf.', height: 38),
-        ],
-      ),
-    );
-  }
-
-  // ─── Error ───
-  Widget _buildErrorBanner() {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppColors.error, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(_errorMessage!,
+          Row(
+            children: [
+              Text(
+                _monthLabel.toUpperCase(),
                 style: TextStyle(
-                  fontSize: 13,
-                  color: isDark ? Colors.white70 : Colors.black87,
-                )),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${roots.length} categorias',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ],
           ),
-          GestureDetector(
-            onTap: _loadCategories,
-            child: const Icon(Icons.refresh_rounded,
-                color: AppColors.error, size: 18),
+          const SizedBox(height: 8),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _fmtShort(_totalSpent),
+              style: const TextStyle(
+                fontSize: 38,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: -1.2,
+                height: 1.1,
+              ),
+            ),
           ),
+          if (top3.isNotEmpty) ...[
+            const SizedBox(height: 14),
+            for (final e in top3) ...[
+              _heroLegendRow(
+                color: _legendColor(top3.indexOf(e)),
+                label: e.key.name,
+                percent: _totalSpent > 0
+                    ? (e.value / _totalSpent * 100).round()
+                    : 0,
+              ),
+              const SizedBox(height: 6),
+            ],
+          ],
         ],
       ),
     );
   }
 
-  // ─── Lista de categorias ───
-  Widget _buildCategoryList(CategoryType type) {
-    if (_isLoading) return _buildListShimmer();
-
-    final filtered = _filteredByType(type);
-
-    if (filtered.isEmpty) return _buildEmptyState(type);
-
-    // Separar sistema e custom
-    final system = filtered.where((c) => c.isSystem).toList();
-    final custom = filtered.where((c) => !c.isSystem).toList();
-
-    return RefreshIndicator(
-      onRefresh: _loadCategories,
-      color: isDark ? AppColors.darkAccent : AppColors.primary,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
-        children: [
-          if (custom.isNotEmpty) ...[
-            _buildSectionLabel(
-                'Minhas categorias', '${custom.length}'),
-            const SizedBox(height: 8),
-            ...custom.map((c) => _buildCategoryCard(c)),
-            const SizedBox(height: 20),
-          ],
-          if (system.isNotEmpty) ...[
-            _buildSectionLabel(
-                'Categorias do sistema', '${system.length}'),
-            const SizedBox(height: 8),
-            ...system.map((c) => _buildCategoryCard(c)),
-          ],
-        ],
-      ),
-    );
+  Color _legendColor(int i) {
+    const palette = [
+      Color(0xFF6BE3B0),
+      Color(0xFFFF8585),
+      Color(0xFFA48BFF),
+    ];
+    return palette[i % palette.length];
   }
 
-  Widget _buildSectionLabel(String title, String count) {
+  Widget _heroLegendRow({
+    required Color color,
+    required String label,
+    required int percent,
+  }) {
     return Row(
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white38 : Colors.black38,
+        Container(
+          width: 10,
+          height: 10,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(3),
           ),
         ),
-        const SizedBox(width: 6),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-          decoration: BoxDecoration(
-            color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(6),
-          ),
+        const SizedBox(width: 8),
+        Expanded(
           child: Text(
-            count,
+            label,
             style: TextStyle(
-              fontSize: 10,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white30 : Colors.black38,
+              fontSize: 12.5,
+              color: Colors.white.withValues(alpha: 0.85),
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
+        Text(
+          '$percent%',
+          style: const TextStyle(
+            fontSize: 12.5,
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildCategoryCard(CategoryEntity category) {
-    final color = _parseColor(category.color);
-
-    return GestureDetector(
-      onLongPress: () => _showCategoryActions(category),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 8),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF14142A) : Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-            color: isDark ? const Color(0xFF252540) : const Color(0xFFEEEEF2),
-          ),
-        ),
-        child: Row(
-          children: [
-            // Ícone
-            Container(
-              width: 42,
-              height: 42,
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _getCategoryIcon(category.icon),
-                color: color,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 14),
-            // Nome + label
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    category.name,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : AppColors.textPrimary,
-                    ),
-                  ),
-                  if (category.parentId != null) ...[
-                    const SizedBox(height: 2),
-                    Text(
-                      'Subcategoria',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.white24 : Colors.black26,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-            // Badges
-            if (category.isSystem)
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? Colors.white.withValues(alpha: 0.06)
-                      : Colors.black.withValues(alpha: 0.04),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  'Sistema',
-                  style: TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w500,
-                    color: isDark ? Colors.white30 : Colors.black38,
-                  ),
-                ),
-              )
-            else
-              GestureDetector(
-                onTap: () => _showEditSheet(category),
-                child: Container(
-                  width: 32,
-                  height: 32,
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.05)
-                        : Colors.black.withValues(alpha: 0.03),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Icon(Icons.edit_rounded,
-                      size: 16,
-                      color: isDark ? Colors.white24 : Colors.black26),
-                ),
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── Shimmer ───
-  Widget _buildListShimmer() {
+  Widget _buildEmpty(ThemeColors tc) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+      padding: const EdgeInsets.only(top: 40),
       child: Column(
-        children: List.generate(6, (i) {
-          return Container(
-            margin: const EdgeInsets.only(bottom: 8),
-            height: 70,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF14142A)
-                  : const Color(0xFFEEEEF2),
-              borderRadius: BorderRadius.circular(16),
+        children: [
+          IconBadge(
+            icon: Icons.category_rounded,
+            tone: 'neutral',
+            size: 64,
+            iconSize: 28,
+            radius: 18,
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'Nenhuma categoria',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: tc.neoTextMuted,
             ),
-          );
-        }),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Crie sua primeira categoria.',
+            style: TextStyle(fontSize: 13, color: tc.neoTextFaint),
+          ),
+          const SizedBox(height: 22),
+          ElevatedButton.icon(
+            onPressed: () => _showCreateSheet(),
+            icon: const Icon(Icons.add_rounded, size: 18),
+            label: const Text('Criar categoria'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: tc.neoTeal,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+              elevation: 0,
+              minimumSize: const Size(220, 48),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  // ─── Empty ───
-  Widget _buildEmptyState(CategoryType type) {
-    final label = _typeLabel(type);
+  Widget _buildError(ThemeColors tc) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 40),
+        padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              width: 72,
-              height: 72,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1C1C2E)
-                    : const Color(0xFFEEEEF2),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Icon(Icons.category_rounded,
-                  size: 32,
-                  color: isDark ? Colors.white12 : Colors.black12),
+            IconBadge(
+              icon: Icons.error_outline_rounded,
+              tone: 'danger',
+              size: 56,
+              iconSize: 26,
+              radius: 16,
             ),
             const SizedBox(height: 16),
             Text(
-              'Nenhuma categoria de $label',
-              style: TextStyle(
-                fontSize: 17,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white38 : Colors.black26,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Crie categorias customizadas\npara organizar melhor.',
+              _errorMessage ?? 'Erro inesperado',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.white70 : Colors.black26,
-                height: 1.4,
-              ),
+              style: TextStyle(fontSize: 14, color: tc.neoTextMuted),
             ),
-            const SizedBox(height: 20),
-            GestureDetector(
-              onTap: _showCreateSheet,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? AppColors.darkAccent.withValues(alpha: 0.15)
-                      : AppColors.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.add_rounded,
-                        size: 18,
-                        color:
-                            isDark ? AppColors.darkAccent : AppColors.primary),
-                    const SizedBox(width: 6),
-                    Text('Criar categoria',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isDark
-                              ? AppColors.darkAccent
-                              : AppColors.primary,
-                        )),
-                  ],
-                ),
-              ),
+            const SizedBox(height: 16),
+            TextButton(
+              onPressed: _loadAll,
+              style: TextButton.styleFrom(foregroundColor: tc.neoTeal),
+              child: const Text('Tentar novamente'),
             ),
           ],
         ),
       ),
     );
   }
+}
 
-  // ─── Icon selector grid ───
-  Widget _buildIconSelector({
-    required String selectedIcon,
-    required String selectedColor,
-    required ValueChanged<String> onChanged,
-  }) {
-    const icons = [
-      {'key': 'food', 'icon': Icons.restaurant_rounded},
-      {'key': 'transport', 'icon': Icons.directions_car_rounded},
-      {'key': 'entertainment', 'icon': Icons.movie_rounded},
-      {'key': 'health', 'icon': Icons.favorite_rounded},
-      {'key': 'shopping', 'icon': Icons.shopping_bag_rounded},
-      {'key': 'bills', 'icon': Icons.receipt_rounded},
-      {'key': 'education', 'icon': Icons.school_rounded},
-      {'key': 'travel', 'icon': Icons.flight_rounded},
-      {'key': 'investment', 'icon': Icons.trending_up_rounded},
-      {'key': 'salary', 'icon': Icons.account_balance_rounded},
-      {'key': 'home', 'icon': Icons.home_rounded},
-      {'key': 'pets', 'icon': Icons.pets_rounded},
-      {'key': 'gifts', 'icon': Icons.card_giftcard_rounded},
-      {'key': 'sports', 'icon': Icons.fitness_center_rounded},
-      {'key': 'category', 'icon': Icons.category_rounded},
-    ];
+class _CategoryGridCard extends StatelessWidget {
+  final CategoryEntity category;
+  final int subCount;
+  final double amount;
+  final VoidCallback onTap;
 
-    final color = _parseColor(selectedColor);
+  const _CategoryGridCard({
+    required this.category,
+    required this.subCount,
+    required this.amount,
+    required this.onTap,
+  });
 
-    return Wrap(
-      spacing: 10,
-      runSpacing: 10,
-      children: icons.map((item) {
-        final key = item['key'] as String;
-        final icon = item['icon'] as IconData;
-        final isSelected = selectedIcon == key;
-        return GestureDetector(
-          onTap: () => onChanged(key),
-          child: Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isSelected
-                  ? color.withValues(alpha: 0.2)
-                  : (isDark
-                      ? Colors.white.withValues(alpha: 0.05)
-                      : Colors.black.withValues(alpha: 0.04)),
-              borderRadius: BorderRadius.circular(10),
-              border: isSelected
-                  ? Border.all(color: color.withValues(alpha: 0.5), width: 1.5)
-                  : null,
-            ),
-            child: Icon(
-              icon,
-              size: 20,
-              color: isSelected
-                  ? color
-                  : (isDark ? Colors.white30 : Colors.black38),
-            ),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  // ─── Utils ───
-  String _typeLabel(CategoryType type) {
-    switch (type) {
-      case CategoryType.expense:
-        return 'despesa';
-      case CategoryType.income:
-        return 'receita';
-      case CategoryType.transfer:
-        return 'transferência';
-    }
-  }
-
-  Color _parseColor(String? hex) {
-    if (hex == null || hex.isEmpty) return AppColors.primary;
+  Color _parseColor(String? hex, Color fallback) {
+    if (hex == null || hex.isEmpty) return fallback;
     final cleaned = hex.replaceAll('#', '');
-    if (cleaned.length != 6) return AppColors.primary;
+    if (cleaned.length != 6) return fallback;
     final value = int.tryParse(cleaned, radix: 16);
-    if (value == null) return AppColors.primary;
+    if (value == null) return fallback;
     return Color(0xFF000000 | value);
   }
 
-  IconData _getCategoryIcon(String? iconName) {
-    if (iconName == null || iconName.isEmpty) return Icons.category_rounded;
-    switch (iconName.toLowerCase()) {
-      case 'food':
-      case 'restaurant':
-        return Icons.restaurant_rounded;
-      case 'transport':
-      case 'car':
-        return Icons.directions_car_rounded;
-      case 'entertainment':
-        return Icons.movie_rounded;
-      case 'health':
-        return Icons.favorite_rounded;
-      case 'shopping':
-        return Icons.shopping_bag_rounded;
-      case 'bills':
-        return Icons.receipt_rounded;
-      case 'education':
-        return Icons.school_rounded;
-      case 'travel':
-        return Icons.flight_rounded;
-      case 'investment':
-        return Icons.trending_up_rounded;
-      case 'salary':
-        return Icons.account_balance_rounded;
-      case 'home':
-        return Icons.home_rounded;
-      case 'pets':
-        return Icons.pets_rounded;
-      case 'gifts':
-        return Icons.card_giftcard_rounded;
-      case 'sports':
-        return Icons.fitness_center_rounded;
-      default:
-        return Icons.category_rounded;
+  String _toneFromName(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('aliment')) return 'food';
+    if (n.contains('transp')) return 'transport';
+    if (n.contains('lazer') || n.contains('entret')) return 'entertainment';
+    if (n.contains('compras')) return 'shopping';
+    if (n.contains('saúde') || n.contains('saude')) return 'health';
+    if (n.contains('contas') || n.contains('moradia') || n.contains('aluguel')) {
+      return 'bills';
     }
+    if (n.contains('salário') || n.contains('salario')) return 'salary';
+    return 'neutral';
+  }
+
+  IconData _iconFromName(String name) {
+    final n = name.toLowerCase();
+    if (n.contains('aliment')) return Icons.restaurant_rounded;
+    if (n.contains('transp')) return Icons.directions_car_rounded;
+    if (n.contains('lazer') || n.contains('entret')) {
+      return Icons.sports_esports_rounded;
+    }
+    if (n.contains('compras')) return Icons.shopping_cart_rounded;
+    if (n.contains('saúde') || n.contains('saude')) {
+      return Icons.medical_services_rounded;
+    }
+    if (n.contains('contas')) return Icons.receipt_long_rounded;
+    if (n.contains('moradia') || n.contains('aluguel')) {
+      return Icons.home_rounded;
+    }
+    if (n.contains('educa')) return Icons.school_rounded;
+    if (n.contains('viagem')) return Icons.flight_rounded;
+    if (n.contains('salár') || n.contains('salario')) {
+      return Icons.flash_on_rounded;
+    }
+    return Icons.category_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final color = _parseColor(category.color, tc.neoTeal);
+
+    return Material(
+      color: tc.neoCard,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () {
+          HapticFeedback.selectionClick();
+          onTap();
+        },
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: tc.neoCardBorder),
+            boxShadow: [
+              BoxShadow(
+                color: tc.neoCardShadow,
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconBadge(
+                icon: _iconFromName(category.name),
+                tone: _toneFromName(category.name),
+                background:
+                    color.withValues(alpha: tc.isDark ? 0.22 : 0.18),
+                foreground: color,
+                size: 40,
+                iconSize: 18,
+                radius: 12,
+              ),
+              const Spacer(),
+              Text(
+                category.name,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: tc.neoText,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subCount > 0
+                    ? '$subCount subcategorias'
+                    : (category.isSystem ? 'Sistema' : 'Customizada'),
+                style: TextStyle(
+                  fontSize: 11.5,
+                  color: tc.neoTextMuted,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                amount > 0 ? _fmtSimple(amount) : '—',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: amount > 0 ? tc.neoText : tc.neoTextFaint,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _fmtSimple(double v) {
+    final f = v.abs().toStringAsFixed(2).replaceAll('.', ',');
+    final p = f.split(',');
+    final i = p[0].replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    return 'R\$ $i,${p[1]}';
   }
 }

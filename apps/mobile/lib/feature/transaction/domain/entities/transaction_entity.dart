@@ -1,6 +1,12 @@
 import 'package:fyna/core/enums/transaction_type.dart';
 
 /// Entidade de domínio de transação — espelha `TransactionResponse` do backend.
+///
+/// Nota sobre datas:
+/// - [transactionDate] é a **data civil** do lançamento (LocalDate no backend).
+///   Sempre vem com hora 00:00 — não use para exibir hora.
+/// - [createdAt] é o **momento exato** em que o registro foi criado no banco
+///   (TIMESTAMP com timezone). Usado pela UI para mostrar hora do lançamento.
 class TransactionEntity {
   final String id;
   final String? accountId;
@@ -17,6 +23,7 @@ class TransactionEntity {
   final bool isRecurring;
   final String? recurringTransactionId;
   final String? attachmentUrl;
+  final DateTime? createdAt;
 
   const TransactionEntity({
     required this.id,
@@ -34,6 +41,7 @@ class TransactionEntity {
     required this.isRecurring,
     this.recurringTransactionId,
     this.attachmentUrl,
+    this.createdAt,
   });
 
   factory TransactionEntity.fromJson(Map<String, dynamic> json) {
@@ -57,7 +65,38 @@ class TransactionEntity {
       isRecurring: json['isRecurring'] as bool? ?? false,
       recurringTransactionId: json['recurringTransactionId']?.toString(),
       attachmentUrl: json['attachmentUrl'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'] as String).toLocal()
+          : null,
     );
+  }
+
+  /// Datetime efetivo para exibição na UI.
+  ///
+  /// Combina a data civil ([transactionDate]) com a hora derivada de
+  /// [createdAt] quando ambos caem no mesmo dia — assim o usuário vê
+  /// "Hoje, 19:42" em vez de "Hoje, 00:00".
+  ///
+  /// Para entradas históricas backdatadas (`transactionDate` ≠ data de
+  /// `createdAt`), usa apenas a data civil com hora 00:00 (o backend não
+  /// armazena a hora real do evento).
+  DateTime get displayDateTime {
+    if (createdAt == null) return transactionDate;
+    final txDay = DateTime(
+        transactionDate.year, transactionDate.month, transactionDate.day);
+    final createdDay =
+        DateTime(createdAt!.year, createdAt!.month, createdAt!.day);
+    if (txDay == createdDay) {
+      return DateTime(
+        transactionDate.year,
+        transactionDate.month,
+        transactionDate.day,
+        createdAt!.hour,
+        createdAt!.minute,
+        createdAt!.second,
+      );
+    }
+    return transactionDate;
   }
 
   Map<String, dynamic> toJson() {
@@ -80,6 +119,7 @@ class TransactionEntity {
       'isRecurring': isRecurring,
       'recurringTransactionId': recurringTransactionId,
       'attachmentUrl': attachmentUrl,
+      'createdAt': createdAt?.toIso8601String(),
     };
   }
 }

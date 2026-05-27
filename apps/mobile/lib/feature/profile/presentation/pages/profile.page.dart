@@ -1,14 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:fyna/config/injection/injection.dart';
 import 'package:fyna/config/routes/app_routes.dart';
-import 'package:fyna/core/constants/app_colors.dart';
-import 'package:fyna/core/themes/theme_notifier.dart';
+import 'package:fyna/core/themes/theme_colors.dart';
+import 'package:fyna/core/widgets/app_list_item.dart';
+import 'package:fyna/core/widgets/app_screen_header.dart';
+import 'package:fyna/core/widgets/icon_badge.dart';
 import 'package:fyna/main.dart' show themeNotifier;
 
 /// Tela de perfil do usuário.
+///
+/// Mantém o parâmetro [isDark] por compatibilidade com chamadas existentes,
+/// mas o tema real é lido dinamicamente via `Theme.of(context)`.
 class ProfilePage extends StatefulWidget {
   final bool isDark;
-
   const ProfilePage({super.key, required this.isDark});
 
   @override
@@ -17,84 +21,123 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage> {
   bool _isLoggingOut = false;
-  bool _showBalances = true;
 
-  /// Lê o tema dinamicamente do contexto — reage em tempo real às mudanças
-  /// de tema sem precisar navegar pra fora da tela.
-  bool get isDark => Theme.of(context).brightness == Brightness.dark;
+  // Dados agregados carregados em background (não bloqueia render).
+  int? _accountsCount;
+  int? _transactionsCount;
 
-  // Lê as iniciais do nome armazenado no SharedPreferences
-  String get _userFullName {
-    final prefs = Injection.instance.prefs;
-    return prefs.getString('user_full_name') ?? 'Usuário';
+  @override
+  void initState() {
+    super.initState();
+    _loadStats();
   }
 
-  String get _userEmail {
-    final prefs = Injection.instance.prefs;
-    return prefs.getString('user_email') ?? '';
+  Future<void> _loadStats() async {
+    try {
+      final accounts =
+          await Injection.instance.accountRepository.getAccounts();
+      if (mounted) setState(() => _accountsCount = accounts.length);
+    } catch (_) {}
+    try {
+      final page = await Injection.instance.transactionRepository
+          .getTransactions(page: 0, size: 1);
+      if (mounted) {
+        // O backend devolve totalElements no PageResponse; usamos a chave.
+        // Como o cliente expõe só `content`, aproximamos pelo size da página
+        // se totalElements não for exposto.
+        final dyn = page as dynamic;
+        try {
+          _transactionsCount = (dyn.totalElements as num?)?.toInt() ??
+              (page.content.length);
+        } catch (_) {
+          _transactionsCount = page.content.length;
+        }
+        if (mounted) setState(() {});
+      }
+    } catch (_) {}
   }
 
-  String get _userLogin {
-    final prefs = Injection.instance.prefs;
-    return prefs.getString('user_login') ?? '';
-  }
+  String get _userFullName =>
+      Injection.instance.prefs.getString('user_full_name') ?? 'Usuário';
+
+  String get _userEmail =>
+      Injection.instance.prefs.getString('user_email') ?? '';
 
   String get _initials {
     final parts = _userFullName.trim().split(' ');
-    if (parts.isEmpty) return 'U';
+    if (parts.isEmpty || parts[0].isEmpty) return 'U';
     if (parts.length == 1) return parts[0][0].toUpperCase();
     return '${parts[0][0]}${parts.last[0]}'.toUpperCase();
   }
 
+  String get _memberSince {
+    final iso = Injection.instance.prefs.getString('user_created_at');
+    if (iso == null) return '—';
+    final created = DateTime.tryParse(iso);
+    if (created == null) return '—';
+    final now = DateTime.now();
+    final months = (now.year - created.year) * 12 + (now.month - created.month);
+    if (months < 1) return 'menos de 1 mês';
+    if (months == 1) return '1 mês';
+    if (months < 12) return '$months meses';
+    final years = months ~/ 12;
+    return years == 1 ? '1 ano' : '$years anos';
+  }
+
+  String _themeLabel(ThemeMode m) {
+    switch (m) {
+      case ThemeMode.light:
+        return 'Claro';
+      case ThemeMode.dark:
+        return 'Escuro';
+      case ThemeMode.system:
+        return 'Sistema';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+
     return SingleChildScrollView(
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.only(bottom: 100),
+      padding: const EdgeInsets.only(bottom: 110),
       child: Column(
         children: [
-          const SizedBox(height: 8),
-
-          // Header com avatar e informações
-          _buildProfileHeader(),
-
+          AppScreenHeader(
+            title: '',
+            showBack: true,
+            actions: [
+              _SquareIconButton(
+                icon: Icons.edit_outlined,
+                onTap: () => _comingSoon('Edição de perfil'),
+              ),
+            ],
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 6),
+          ),
+          _buildProfileHeader(tc),
+          const SizedBox(height: 18),
+          _buildStatsRow(tc),
+          const SizedBox(height: 20),
+          _sectionLabel(tc, 'CONTA'),
+          const SizedBox(height: 10),
+          _buildAccountSection(tc),
+          const SizedBox(height: 20),
+          _sectionLabel(tc, 'PREFERÊNCIAS'),
+          const SizedBox(height: 10),
+          _buildPreferencesSection(tc),
+          const SizedBox(height: 20),
+          _sectionLabel(tc, 'SOBRE'),
+          const SizedBox(height: 10),
+          _buildAboutSection(tc),
           const SizedBox(height: 24),
-
-          // Seção: Finanças
-          _buildSectionTitle('Finanças'),
-          _buildFinancesSection(),
-
-          const SizedBox(height: 20),
-
-          // Seção: Preferências
-          _buildSectionTitle('Preferências'),
-          _buildPreferencesSection(),
-
-          const SizedBox(height: 20),
-
-          // Seção: Configurações
-          _buildSectionTitle('Configurações'),
-          _buildSettingsSection(),
-
-          const SizedBox(height: 20),
-
-          // Seção: Sobre
-          _buildSectionTitle('Sobre'),
-          _buildAboutSection(),
-
-          const SizedBox(height: 32),
-
-          // Botão de logout
-          _buildLogoutButton(),
-
-          const SizedBox(height: 16),
-
-          // Versão
+          _buildLogoutButton(tc),
+          const SizedBox(height: 14),
           Text(
             'Fyna v1.0.0',
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? Colors.white24 : Colors.black26,
+              color: tc.neoTextFaint,
             ),
           ),
         ],
@@ -102,71 +145,56 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // ─── Header com avatar ──────────────────────────────────────────────────────
-
-  Widget _buildProfileHeader() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  const Color(0xFF1A1A2E),
-                  const Color(0xFF16213E),
-                ]
-              : [
-                  AppColors.primary.withValues(alpha: 0.08),
-                  AppColors.accent.withValues(alpha: 0.05),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: isDark
-              ? const Color(0xFF252540)
-              : AppColors.primary.withValues(alpha: 0.1),
-        ),
-      ),
+  Widget _sectionLabel(ThemeColors tc, String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(28, 0, 20, 0),
       child: Row(
         children: [
-          // Avatar
+          Text(
+            text,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.1,
+              color: tc.neoTextFaint,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileHeader(ThemeColors tc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Row(
+        children: [
           Container(
             width: 64,
             height: 64,
             decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: isDark
-                    ? [AppColors.darkAccent, AppColors.darkPrimary]
-                    : [AppColors.primary, AppColors.accent],
-              ),
+              gradient: tc.heroGradient,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(
-                  color: (isDark ? AppColors.darkAccent : AppColors.primary)
-                      .withValues(alpha: 0.3),
-                  blurRadius: 12,
+                  color: Colors.black.withValues(alpha: 0.15),
+                  blurRadius: 10,
                   offset: const Offset(0, 4),
                 ),
               ],
             ),
-            child: Center(
-              child: Text(
-                _initials,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
+            alignment: Alignment.center,
+            child: Text(
+              _initials,
+              style: const TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: Colors.white,
+                letterSpacing: -0.5,
               ),
             ),
           ),
-          const SizedBox(width: 16),
-
-          // Info
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -174,678 +202,511 @@ class _ProfilePageState extends State<ProfilePage> {
                 Text(
                   _userFullName,
                   style: TextStyle(
-                    fontSize: 18,
+                    fontSize: 19,
                     fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : Colors.black87,
+                    color: tc.neoText,
+                    letterSpacing: -0.3,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 4),
-                if (_userEmail.isNotEmpty)
-                  Text(
-                    _userEmail,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: isDark ? Colors.white38 : Colors.black45,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                const SizedBox(height: 2),
+                Text(
+                  _userEmail,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: tc.neoTextMuted,
                   ),
-                if (_userLogin.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 2),
-                    child: Text(
-                      '@$_userLogin',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: isDark ? Colors.white24 : Colors.black26,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: tc.neoAttention.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.workspace_premium_rounded,
+                          color: tc.neoAttention, size: 12),
+                      const SizedBox(width: 4),
+                      Text(
+                        'PRO',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: 0.6,
+                          color: tc.neoAttention,
+                        ),
                       ),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Seções ─────────────────────────────────────────────────────────────────
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 0, 24, 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          title,
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white38 : Colors.black45,
-            letterSpacing: 0.3,
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFinancesSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14142A) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? const Color(0xFF252540) : const Color(0xFFEEEEF2),
-        ),
-      ),
-      child: Column(
-        children: [
-          _buildActionTile(
-            icon: Icons.pie_chart_rounded,
-            title: 'Orçamentos',
-            subtitle: 'Gerenciar limites de gastos',
-            onTap: () => Navigator.pushNamed(context, AppRoutes.budgets),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.flag_rounded,
-            title: 'Metas financeiras',
-            subtitle: 'Acompanhar seus objetivos',
-            onTap: () => Navigator.pushNamed(context, AppRoutes.goals),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.repeat_rounded,
-            title: 'Recorrências',
-            subtitle: 'Despesas e receitas fixas',
-            onTap: () => Navigator.pushNamed(context, AppRoutes.recurring),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.category_rounded,
-            title: 'Categorias',
-            subtitle: 'Organizar suas transações',
-            onTap: () => Navigator.pushNamed(context, AppRoutes.categories),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.auto_awesome_rounded,
-            title: 'Insights da IA',
-            subtitle: 'Análises e recomendações',
-            onTap: () => Navigator.pushNamed(context, AppRoutes.aiInsights),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildPreferencesSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14142A) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? const Color(0xFF252540) : const Color(0xFFEEEEF2),
-        ),
-      ),
-      child: Column(
-        children: [
-          _buildThemeSelector(),
-          _buildDivider(),
-          _buildToggleTile(
-            icon: Icons.visibility_rounded,
-            title: 'Exibir saldos',
-            subtitle: 'Mostrar valores na tela inicial',
-            value: _showBalances,
-            onChanged: (val) => setState(() => _showBalances = val),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildSettingsSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14142A) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? const Color(0xFF252540) : const Color(0xFFEEEEF2),
-        ),
-      ),
-      child: Column(
-        children: [
-          _buildActionTile(
-            icon: Icons.notifications_rounded,
-            title: 'Notificações',
-            subtitle: 'Gerenciar alertas e lembretes',
-            onTap: () => Navigator.pushNamed(context, AppRoutes.notifications),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.lock_rounded,
-            title: 'Segurança',
-            subtitle: 'Senha e autenticação',
-            onTap: () => _showComingSoon('Segurança'),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.download_rounded,
-            title: 'Exportar dados',
-            subtitle: 'Baixar seus dados em CSV',
-            onTap: () => _showComingSoon('Exportação'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildAboutSection() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF14142A) : Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: isDark ? const Color(0xFF252540) : const Color(0xFFEEEEF2),
-        ),
-      ),
-      child: Column(
-        children: [
-          _buildActionTile(
-            icon: Icons.info_outline_rounded,
-            title: 'Sobre o Fyna',
-            subtitle: 'Versão, licenças e créditos',
-            onTap: () => _showAboutDialog(),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.help_outline_rounded,
-            title: 'Ajuda e suporte',
-            subtitle: 'FAQ e contato',
-            onTap: () => _showComingSoon('Ajuda'),
-          ),
-          _buildDivider(),
-          _buildActionTile(
-            icon: Icons.description_outlined,
-            title: 'Termos de uso',
-            subtitle: 'Política de privacidade',
-            onTap: () => _showComingSoon('Termos'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Componentes reutilizáveis ─────────────────────────────────────────────
-
-  Widget _buildThemeSelector() {
-    final currentMode = themeNotifier.themeMode;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.darkAccent.withValues(alpha: 0.1)
-                  : AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              Icons.palette_rounded,
-              color: isDark ? AppColors.darkAccent : AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Tema',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  _getThemeLabel(currentMode),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white30 : Colors.black38,
+                    ],
                   ),
                 ),
               ],
             ),
           ),
-          // Chips de seleção de tema
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _buildThemeChip(
-                icon: Icons.phone_android_rounded,
-                label: 'Auto',
-                isSelected: currentMode == ThemeMode.system,
-                onTap: () => _setTheme(ThemeMode.system),
-              ),
-              const SizedBox(width: 6),
-              _buildThemeChip(
-                icon: Icons.light_mode_rounded,
-                label: 'Claro',
-                isSelected: currentMode == ThemeMode.light,
-                onTap: () => _setTheme(ThemeMode.light),
-              ),
-              const SizedBox(width: 6),
-              _buildThemeChip(
-                icon: Icons.dark_mode_rounded,
-                label: 'Escuro',
-                isSelected: currentMode == ThemeMode.dark,
-                onTap: () => _setTheme(ThemeMode.dark),
-              ),
-            ],
-          ),
         ],
       ),
     );
   }
 
-  Widget _buildThemeChip({
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? (isDark ? AppColors.darkAccent : AppColors.primary)
-              : (isDark ? const Color(0xFF1C1C2E) : const Color(0xFFF0F0F4)),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 14,
-              color: isSelected
-                  ? Colors.white
-                  : (isDark ? Colors.white30 : Colors.black38),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isSelected
-                    ? Colors.white
-                    : (isDark ? Colors.white30 : Colors.black38),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildToggleTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: isDark
-                  ? AppColors.darkAccent.withValues(alpha: 0.1)
-                  : AppColors.primary.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: isDark ? AppColors.darkAccent : AppColors.primary,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.white : Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  subtitle,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white30 : Colors.black38,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeColor: isDark ? AppColors.darkAccent : AppColors.primary,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionTile({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? Colors.white.withValues(alpha: 0.05)
-                    : Colors.black.withValues(alpha: 0.04),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                icon,
-                color: isDark ? Colors.white54 : Colors.black54,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: isDark ? Colors.white : Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? Colors.white30 : Colors.black38,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: isDark ? Colors.white24 : Colors.black26,
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Divider(
-        height: 1,
-        color: isDark ? const Color(0xFF252540) : const Color(0xFFF0F0F4),
-      ),
-    );
-  }
-
-  // ─── Logout ────────────────────────────────────────────────────────────────
-
-  Widget _buildLogoutButton() {
+  Widget _buildStatsRow(ThemeColors tc) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: InkWell(
-        onTap: _isLoggingOut ? null : _handleLogout,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          decoration: BoxDecoration(
-            color: AppColors.error.withValues(alpha: isDark ? 0.12 : 0.06),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: AppColors.error.withValues(alpha: 0.2),
+      child: Row(
+        children: [
+          Expanded(
+            child: _StatCard(label: 'Membro há', value: _memberSince),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
+              label: 'Transações',
+              value: _transactionsCount?.toString() ?? '—',
             ),
           ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (_isLoggingOut)
-                SizedBox(
+          const SizedBox(width: 10),
+          Expanded(
+            child: _StatCard(
+              label: 'Contas',
+              value: _accountsCount?.toString() ?? '—',
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountSection(ThemeColors tc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.person_outline_rounded,
+              tone: 'transfer',
+            ),
+            title: 'Dados pessoais',
+            onTap: () => _comingSoon('Dados pessoais'),
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.shield_outlined,
+              tone: 'success',
+            ),
+            title: 'Segurança',
+            trailing: Text(
+              'Face ID ativo',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: tc.neoPositive,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onTap: () => _comingSoon('Configurações de segurança'),
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.notifications_none_rounded,
+              tone: 'warning',
+            ),
+            title: 'Notificações',
+            onTap: () =>
+                Navigator.pushNamed(context, AppRoutes.notifications),
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.account_balance_wallet_rounded,
+              tone: 'info',
+            ),
+            title: 'Contas conectadas',
+            trailing: Text(
+              _accountsCount != null
+                  ? '${_accountsCount!} ${_accountsCount == 1 ? 'conta' : 'contas'}'
+                  : '—',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: tc.neoTextMuted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.home),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPreferencesSection(ThemeColors tc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.palette_outlined,
+              tone: 'shopping',
+            ),
+            title: 'Aparência',
+            trailing: Text(
+              _themeLabel(themeNotifier.themeMode),
+              style: TextStyle(
+                fontSize: 12.5,
+                color: tc.neoTextMuted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            onTap: _showThemeSheet,
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.attach_money_rounded,
+              tone: 'transport',
+            ),
+            title: 'Moeda padrão',
+            trailing: Text(
+              'BRL',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: tc.neoTextMuted,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            onTap: () => _comingSoon('Mudança de moeda'),
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.auto_awesome_rounded,
+              tone: 'ai',
+            ),
+            title: 'Assistente IA',
+            trailing: Text(
+              'Ativo',
+              style: TextStyle(
+                fontSize: 12.5,
+                color: tc.neoPositive,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.aiInsights),
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.category_rounded,
+              tone: 'entertainment',
+            ),
+            title: 'Categorias',
+            onTap: () => Navigator.pushNamed(context, AppRoutes.categories),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAboutSection(ThemeColors tc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.help_outline_rounded,
+              tone: 'info',
+            ),
+            title: 'Central de ajuda',
+            onTap: () => _comingSoon('Central de ajuda'),
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.description_outlined,
+              tone: 'neutral',
+            ),
+            title: 'Termos de uso',
+            onTap: () => _comingSoon('Termos de uso'),
+          ),
+          const SizedBox(height: 8),
+          AppListItem(
+            leading: const IconBadge(
+              icon: Icons.privacy_tip_outlined,
+              tone: 'neutral',
+            ),
+            title: 'Política de privacidade',
+            onTap: () => _comingSoon('Política de privacidade'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton(ThemeColors tc) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: SizedBox(
+        width: double.infinity,
+        height: 50,
+        child: OutlinedButton.icon(
+          onPressed: _isLoggingOut ? null : _handleLogout,
+          icon: _isLoggingOut
+              ? SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: AppColors.error.withValues(alpha: 0.7),
+                    color: tc.neoNegative,
                   ),
                 )
-              else
-                Icon(
-                  Icons.logout_rounded,
-                  color: AppColors.error.withValues(alpha: 0.8),
-                  size: 20,
-                ),
-              const SizedBox(width: 10),
-              Text(
-                _isLoggingOut ? 'Saindo...' : 'Sair da conta',
-                style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.error.withValues(alpha: 0.8),
-                ),
-              ),
-            ],
+              : Icon(Icons.logout_rounded, color: tc.neoNegative, size: 20),
+          label: Text(
+            _isLoggingOut ? 'Saindo...' : 'Sair da conta',
+            style: TextStyle(
+              fontSize: 14.5,
+              fontWeight: FontWeight.w600,
+              color: tc.neoNegative,
+            ),
+          ),
+          style: OutlinedButton.styleFrom(
+            side: BorderSide(color: tc.neoNegative.withValues(alpha: 0.35)),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
           ),
         ),
       ),
     );
   }
 
-  // ─── Ações ─────────────────────────────────────────────────────────────────
+  // ─── Sheets / Dialogs ───
 
-  void _setTheme(ThemeMode mode) {
-    themeNotifier.setThemeMode(mode);
-    final prefs = Injection.instance.prefs;
-    prefs.setString('theme_mode', ThemeNotifier.toBackendString(mode));
+  void _showThemeSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final tc = ThemeColors.of(ctx);
+        return SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(20, 14, 20, 24),
+            decoration: BoxDecoration(
+              color: tc.neoCardElevated,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(24)),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: tc.neoTextFaint.withValues(alpha: 0.4),
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  'Aparência',
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                    color: tc.neoText,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                _themeOption(
+                  tc,
+                  icon: Icons.phone_android_rounded,
+                  label: 'Automático',
+                  description: 'Segue o sistema',
+                  mode: ThemeMode.system,
+                ),
+                const SizedBox(height: 8),
+                _themeOption(
+                  tc,
+                  icon: Icons.light_mode_rounded,
+                  label: 'Tema claro',
+                  description: 'Fundo claro o tempo todo',
+                  mode: ThemeMode.light,
+                ),
+                const SizedBox(height: 8),
+                _themeOption(
+                  tc,
+                  icon: Icons.dark_mode_rounded,
+                  label: 'Tema escuro',
+                  description: 'Fundo escuro o tempo todo',
+                  mode: ThemeMode.dark,
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
-  String _getThemeLabel(ThemeMode mode) {
-    switch (mode) {
-      case ThemeMode.light:
-        return 'Tema claro';
-      case ThemeMode.dark:
-        return 'Tema escuro';
-      default:
-        return 'Automático (sistema)';
-    }
+  Widget _themeOption(
+    ThemeColors tc, {
+    required IconData icon,
+    required String label,
+    required String description,
+    required ThemeMode mode,
+  }) {
+    final isActive = themeNotifier.themeMode == mode;
+    return AppListItem(
+      leading: IconBadge(
+        icon: icon,
+        tone: isActive ? 'transfer' : 'neutral',
+      ),
+      title: label,
+      subtitle: description,
+      trailing: isActive ? Icon(Icons.check_rounded, color: tc.neoTeal) : null,
+      onTap: () {
+        themeNotifier.setThemeMode(mode);
+        Navigator.pop(context);
+        if (mounted) setState(() {});
+      },
+    );
   }
 
   Future<void> _handleLogout() async {
-    // Confirmação
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          'Sair da conta',
-          style: TextStyle(
-            fontWeight: FontWeight.w700,
-            color: isDark ? Colors.white : Colors.black87,
+      builder: (ctx) {
+        final tc = ThemeColors.of(ctx);
+        return AlertDialog(
+          backgroundColor: tc.neoCardElevated,
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          icon: IconBadge(
+            icon: Icons.logout_rounded,
+            tone: 'danger',
+            size: 56,
+            iconSize: 26,
+            radius: 16,
           ),
-        ),
-        content: Text(
-          'Tem certeza que deseja sair? Você precisará fazer login novamente.',
-          style: TextStyle(
-            color: isDark ? Colors.white54 : Colors.black54,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: Text(
-              'Cancelar',
-              style: TextStyle(
-                color: isDark ? Colors.white38 : Colors.black38,
-              ),
+          title: Text(
+            'Sair da conta?',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: tc.neoText,
             ),
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text(
-              'Sair',
-              style: TextStyle(
-                color: AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
+          content: Text(
+            'Você precisará fazer login novamente para acessar suas finanças.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 14,
+              color: tc.neoTextMuted,
+              height: 1.5,
             ),
           ),
-        ],
-      ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: Text(
+                'Cancelar',
+                style: TextStyle(
+                  color: tc.neoTextMuted,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: tc.neoNegative,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: const Text('Sair',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+            ),
+          ],
+        );
+      },
     );
 
     if (confirmed != true || !mounted) return;
 
     setState(() => _isLoggingOut = true);
-
     try {
       await Injection.instance.authRepository.logout();
     } catch (_) {
-      // Ignora erros — limpa tokens locais de qualquer forma
+      // Limpa tokens locais de qualquer forma
     }
-
     if (!mounted) return;
-
-    // Navega para login e limpa a pilha
     Navigator.pushNamedAndRemoveUntil(context, '/login', (_) => false);
   }
 
-  void _showComingSoon(String feature) {
+  void _comingSoon(String feature) {
+    final tc = ThemeColors.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('$feature estará disponível em breve!'),
-        backgroundColor: isDark ? const Color(0xFF1A1A2E) : AppColors.primary,
+        content: Text('$feature em breve'),
+        backgroundColor: tc.neoTeal,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         duration: const Duration(seconds: 2),
       ),
     );
   }
+}
 
-  void _showAboutDialog() {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? const Color(0xFF1A1A2E) : Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [AppColors.darkAccent, AppColors.darkPrimary]
-                      : [AppColors.primary, AppColors.accent],
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Center(
-                child: Text(
-                  'F',
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  const _StatCard({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: tc.neoCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: tc.neoCardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: tc.neoTextFaint,
             ),
-            const SizedBox(width: 12),
-            Text(
-              'Fyna',
-              style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: isDark ? Colors.white : Colors.black87,
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Seu assistente financeiro pessoal com inteligência artificial.',
-              style: TextStyle(
-                fontSize: 14,
-                color: isDark ? Colors.white54 : Colors.black54,
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildAboutRow('Versão', '1.0.0'),
-            _buildAboutRow('Plataforma', 'Flutter'),
-            _buildAboutRow('Licença', 'Proprietária'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
             child: Text(
-              'Fechar',
+              value,
               style: TextStyle(
-                color: isDark ? AppColors.darkAccent : AppColors.primary,
-                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: tc.neoText,
               ),
             ),
           ),
@@ -853,29 +714,31 @@ class _ProfilePageState extends State<ProfilePage> {
       ),
     );
   }
+}
 
-  Widget _buildAboutRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: isDark ? Colors.white38 : Colors.black38,
-            ),
+class _SquareIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _SquareIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    return Material(
+      color: tc.neoCard,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: tc.neoCardBorder),
           ),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white70 : Colors.black54,
-            ),
-          ),
-        ],
+          child: Icon(icon, size: 16, color: tc.neoText),
+        ),
       ),
     );
   }

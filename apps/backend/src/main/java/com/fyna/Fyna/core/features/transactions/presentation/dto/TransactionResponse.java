@@ -1,6 +1,7 @@
 package com.fyna.Fyna.core.features.transactions.presentation.dto;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
@@ -22,7 +23,11 @@ public record TransactionResponse(
         boolean isPaid,
         boolean isRecurring,
         UUID recurringTransactionId,
-        String attachmentUrl
+        String attachmentUrl,
+        // `createdAt` exposto para o cliente derivar o horário exato do
+        // lançamento. `transactionDate` continua sendo a data civil (LocalDate),
+        // mas a UI usa `createdAt` quando precisa mostrar HH:mm.
+        Instant createdAt
 ) {
     public static TransactionResponse from(Transactions transaction) {
         return new TransactionResponse(
@@ -40,7 +45,8 @@ public record TransactionResponse(
                 transaction.getIsPaid(),
                 transaction.getIsRecurring(),
                 transaction.getRecurringTransactions() != null ? transaction.getRecurringTransactions().getId() : null,
-                transaction.getAttachmentUrl()
+                transaction.getAttachmentUrl(),
+                transaction.getCreatedAt()
         );
     }
 }

@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:fyna/core/constants/app_colors.dart';
+import 'package:fyna/core/themes/theme_colors.dart';
+import 'package:fyna/core/widgets/icon_badge.dart';
 
-/// Botões de ação rápida: Despesa, Receita, Transferência, Conta.
+/// Atalhos rápidos: Receita / Despesa / Transferir / Conta.
+///
+/// 4 cards brancos lado a lado com badge pastel + ícone + label embaixo.
 class HomeQuickActions extends StatelessWidget {
   final bool isDark;
   final VoidCallback? onAddExpense;
@@ -20,112 +23,107 @@ class HomeQuickActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // ignore: shadow_local_variables
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 8),
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
       child: Row(
         children: [
           Expanded(
-            child: _buildActionButton(
-              icon: Icons.arrow_downward_rounded,
-              label: 'Despesa',
-              onTap: onAddExpense ?? () {},
-              accentColor: const Color(0xFFFF5252),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _buildActionButton(
-              icon: Icons.arrow_upward_rounded,
+            child: _ActionCard(
+              icon: Icons.south_rounded,
               label: 'Receita',
-              onTap: onAddIncome ?? () {},
-              accentColor: const Color(0xFF00C853),
+              tone: 'success',
+              onTap: onAddIncome,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
-            child: _buildActionButton(
+            child: _ActionCard(
+              icon: Icons.north_rounded,
+              label: 'Despesa',
+              tone: 'danger',
+              onTap: onAddExpense,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: _ActionCard(
               icon: Icons.swap_horiz_rounded,
               label: 'Transferir',
-              onTap: onAddTransfer ?? () {},
-              accentColor: const Color(0xFF2196F3),
+              tone: 'info',
+              onTap: onAddTransfer,
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
-            child: _buildActionButton(
+            child: _ActionCard(
               icon: Icons.account_balance_rounded,
               label: 'Conta',
-              onTap: onAddAccount ?? () {},
-              accentColor: isDark ? AppColors.darkAccent : AppColors.primary,
+              tone: 'transfer',
+              onTap: onAddAccount,
             ),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _buildActionButton({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-    required Color accentColor,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF1C1C2E) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isDark
-                ? accentColor.withValues(alpha: 0.15)
-                : accentColor.withValues(alpha: 0.12),
+class _ActionCard extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String tone;
+  final VoidCallback? onTap;
+
+  const _ActionCard({
+    required this.icon,
+    required this.label,
+    required this.tone,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    return Material(
+      color: tc.neoCard,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: tc.neoCardBorder),
+            boxShadow: [
+              BoxShadow(
+                color: tc.neoCardShadow,
+                blurRadius: 10,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
-          boxShadow: [
-            BoxShadow(
-              color: accentColor.withValues(alpha: isDark ? 0.08 : 0.06),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    accentColor.withValues(alpha: 0.15),
-                    accentColor.withValues(alpha: 0.05),
-                  ],
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconBadge(
+                icon: icon,
+                tone: tone,
+                size: 38,
+                iconSize: 18,
+                radius: 12,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: tc.neoText,
                 ),
-                borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(
-                icon,
-                color: accentColor,
-                size: 24,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: isDark ? Colors.white70 : AppColors.textSecondary,
-                letterSpacing: 0.2,
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
