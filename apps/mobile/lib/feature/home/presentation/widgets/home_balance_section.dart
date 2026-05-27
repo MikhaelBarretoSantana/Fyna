@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:fyna/core/themes/theme_colors.dart';
+import 'package:fyna/core/widgets/hero_gradient_card.dart';
 
-/// Seção do saldo principal + info da conta.
-class HomeBalanceSection extends StatelessWidget {
+/// Card principal do saldo + receitas/despesas do mês.
+///
+/// Usa o gradiente teal hero do design system.
+class HomeBalanceSection extends StatefulWidget {
   final double balance;
   final String currencyCode;
   final bool isDark;
@@ -9,6 +13,8 @@ class HomeBalanceSection extends StatelessWidget {
   final String? accountType;
   final String? institution;
   final String? accountColor;
+  final double? monthIncome;
+  final double? monthExpense;
 
   const HomeBalanceSection({
     super.key,
@@ -19,184 +25,230 @@ class HomeBalanceSection extends StatelessWidget {
     this.accountType,
     this.institution,
     this.accountColor,
+    this.monthIncome,
+    this.monthExpense,
   });
 
-  /// Converte hex string (ex: '#1A7B8C') para Color.
-  Color _parseColor(String? hex) {
-    if (hex == null || hex.isEmpty) return const Color(0xFF0D4F6E);
-    final cleaned = hex.replaceAll('#', '');
-    if (cleaned.length != 6) return const Color(0xFF0D4F6E);
-    final value = int.tryParse(cleaned, radix: 16);
-    if (value == null) return const Color(0xFF0D4F6E);
-    return Color(0xFF000000 | value);
-  }
+  @override
+  State<HomeBalanceSection> createState() => _HomeBalanceSectionState();
+}
+
+class _HomeBalanceSectionState extends State<HomeBalanceSection> {
+  bool _hidden = false;
 
   @override
   Widget build(BuildContext context) {
-    // Lê o tema dinamicamente para reagir a mudanças de tema em tempo real
-    // (o param isDark do construtor é ignorado intencionalmente).
-    // ignore: shadow_local_variables
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-      padding: const EdgeInsets.fromLTRB(24, 28, 24, 20),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: isDark
-              ? [
-                  HSLColor.fromColor(_parseColor(accountColor))
-                      .withLightness(0.18)
-                      .toColor(),
-                  HSLColor.fromColor(_parseColor(accountColor))
-                      .withLightness(0.10)
-                      .toColor(),
-                ]
-              : [
-                  _parseColor(accountColor),
-                  HSLColor.fromColor(_parseColor(accountColor))
-                      .withLightness(
-                        (HSLColor.fromColor(_parseColor(accountColor)).lightness - 0.1)
-                            .clamp(0.0, 1.0),
-                      )
-                      .toColor(),
-                ],
-        ),
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withValues(alpha: 0.4)
-                : _parseColor(accountColor).withValues(alpha: 0.3),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
-          ),
-        ],
+    final tc = ThemeColors.of(context);
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      child: HeroGradientCard(
+        padding: const EdgeInsets.fromLTRB(20, 20, 20, 18),
+        child: widget.isLoading ? _buildLoading() : _buildContent(tc),
       ),
-      child: isLoading ? _buildLoadingState() : _buildContent(),
     );
   }
 
-  Widget _buildLoadingState() {
+  Widget _buildLoading() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Container(
-          width: 200,
-          height: 40,
+          width: 160,
+          height: 12,
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.1),
+            color: Colors.white.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(6),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          width: 220,
+          height: 38,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.18),
             borderRadius: BorderRadius.circular(8),
           ),
         ),
-        const SizedBox(height: 12),
-        Container(
-          width: 120,
-          height: 16,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.06),
-            borderRadius: BorderRadius.circular(4),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildContent() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Label do saldo
-        Text(
-          'Saldo atual',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w400,
-            color: Colors.white.withValues(alpha: 0.6),
-          ),
-        ),
-        const SizedBox(height: 4),
-
-        // Saldo principal
-        FittedBox(
-          fit: BoxFit.scaleDown,
-          alignment: Alignment.centerLeft,
-          child: Text(
-            _formatBalance(),
-            style: const TextStyle(
-              fontSize: 38,
-              fontWeight: FontWeight.w800,
-              color: Colors.white,
-              letterSpacing: -1,
-              height: 1.1,
-            ),
-          ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Info da conta
+        const SizedBox(height: 18),
         Row(
           children: [
-            if (accountType != null) ...[
-              _buildInfoChip(
-                icon: Icons.account_balance_rounded,
-                label: accountType!,
-              ),
-              const SizedBox(width: 10),
-            ],
-            if (institution != null && institution!.isNotEmpty)
-              _buildInfoChip(
-                icon: Icons.business_rounded,
-                label: institution!,
-              ),
+            Expanded(child: _miniLoading()),
+            const SizedBox(width: 10),
+            Expanded(child: _miniLoading()),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildInfoChip({
-    required IconData icon,
-    required String label,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
+  Widget _miniLoading() => Container(
+        height: 56,
+        decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
         ),
+      );
+
+  Widget _buildContent(ThemeColors tc) {
+    final label = (widget.accountType ?? 'Saldo')
+        .toUpperCase()
+        .replaceAll('_', ' ');
+    final balanceText = _hidden ? 'R\$ ••••••••' : _formatMoney(widget.balance);
+
+    final parts = balanceText.split(',');
+    final intPart = parts[0];
+    final decPart = parts.length > 1 ? parts[1] : '00';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                'SALDO · $label',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            GestureDetector(
+              onTap: () => setState(() => _hidden = !_hidden),
+              child: Icon(
+                _hidden
+                    ? Icons.visibility_off_rounded
+                    : Icons.visibility_rounded,
+                color: Colors.white.withValues(alpha: 0.85),
+                size: 22,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -1.2,
+                height: 1.1,
+              ),
+              children: [
+                TextSpan(text: intPart, style: const TextStyle(fontSize: 38)),
+                TextSpan(
+                  text: ',$decPart',
+                  style: TextStyle(
+                    fontSize: 22,
+                    color: Colors.white.withValues(alpha: 0.85),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Row(
+          children: [
+            Expanded(
+              child: _MiniStat(
+                icon: Icons.south_rounded,
+                label: 'Receitas',
+                value: _hidden
+                    ? '••••'
+                    : _formatMoney(widget.monthIncome ?? 0),
+                accent: const Color(0xFF6BE3B0),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: _MiniStat(
+                icon: Icons.north_rounded,
+                label: 'Despesas',
+                value: _hidden
+                    ? '••••'
+                    : _formatMoney(widget.monthExpense ?? 0),
+                accent: const Color(0xFFFF8585),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  String _formatMoney(double value) {
+    final formatted = value.toStringAsFixed(2).replaceAll('.', ',');
+    final parts = formatted.split(',');
+    final intPart = parts[0].replaceAllMapped(
+      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
+      (m) => '${m[1]}.',
+    );
+    return 'R\$ $intPart,${parts[1]}';
+  }
+}
+
+class _MiniStat extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color accent;
+
+  const _MiniStat({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.accent,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.09),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: Colors.white60, size: 14),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: Colors.white70,
+          Row(
+            children: [
+              Icon(icon, color: accent, size: 14),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w500,
+                  color: Colors.white.withValues(alpha: 0.75),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: accent,
+              ),
             ),
           ),
         ],
       ),
     );
-  }
-
-  String _formatBalance() {
-    final formatted = balance.toStringAsFixed(2).replaceAll('.', ',');
-    // Adiciona separador de milhar
-    final parts = formatted.split(',');
-    final intPart = parts[0].replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]}.',
-    );
-    return 'R\$ $intPart,${parts[1]}';
   }
 }

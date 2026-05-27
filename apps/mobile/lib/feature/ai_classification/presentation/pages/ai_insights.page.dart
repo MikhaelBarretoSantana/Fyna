@@ -1,9 +1,14 @@
-import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fyna/config/injection/injection.dart';
-import 'package:fyna/core/constants/app_colors.dart';
+import 'package:fyna/core/enums/category_type.dart';
+import 'package:fyna/core/enums/transaction_type.dart';
 import 'package:fyna/core/errors/exceptions.dart';
+import 'package:fyna/core/themes/theme_colors.dart';
+import 'package:fyna/core/widgets/app_pill_tabs.dart';
+import 'package:fyna/core/widgets/category_picker_sheet.dart';
+import 'package:fyna/core/widgets/hero_gradient_card.dart';
+import 'package:fyna/core/widgets/icon_badge.dart';
 import 'package:fyna/feature/ai_classification/domain/entities/ai_classification_entity.dart';
 import 'package:fyna/feature/ai_classification/domain/entities/spending_pattern_entity.dart';
 import 'package:fyna/feature/ai_classification/domain/entities/spending_prediction_entity.dart';
@@ -18,10 +23,8 @@ class AIInsightsPage extends StatefulWidget {
   State<AIInsightsPage> createState() => _AIInsightsPageState();
 }
 
-class _AIInsightsPageState extends State<AIInsightsPage>
-    with SingleTickerProviderStateMixin {
-  bool get isDark => Theme.of(context).brightness == Brightness.dark;
-  late TabController _tabController;
+class _AIInsightsPageState extends State<AIInsightsPage> {
+  int _selectedTab = 0; // 0=Padrões, 1=Previsões, 2=Classif., 3=Invest.
 
   // ─── Data ───
   List<SpendingPatternEntity> _patterns = [];
@@ -30,47 +33,36 @@ class _AIInsightsPageState extends State<AIInsightsPage>
   List<InvestmentRecommendationEntity> _recommendations = [];
   List<CategoryEntity> _categories = [];
 
-  // ─── Loading states ───
+  // ─── Loading ───
   bool _isLoadingPatterns = true;
   bool _isLoadingPredictions = true;
   bool _isLoadingClassifications = true;
   bool _isLoadingRecommendations = true;
 
-  // ─── Error states ───
+  // ─── Errors ───
   String? _patternsError;
   String? _predictionsError;
   String? _classificationsError;
   String? _recommendationsError;
 
-  // ─── Action states ───
+  // ─── Action state ───
   bool _isAnalyzing = false;
   final Set<String> _confirmingIds = {};
+  final Map<String, TransactionType> _txTypeByClassification = {};
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
-    _tabController.addListener(() {
-      if (!_tabController.indexIsChanging) setState(() {});
-    });
     _loadAllData();
     _triggerAnalysisInBackground();
   }
 
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
-  /// Dispara análise no Python em background (fire-and-forget ao abrir a tela).
   Future<void> _triggerAnalysisInBackground() async {
     try {
       await Injection.instance.aiInsightsRepository.triggerAnalysis();
     } catch (_) {}
   }
 
-  /// Dispara análise e recarrega todos os dados (botão manual).
   Future<void> _triggerAndRefresh() async {
     HapticFeedback.mediumImpact();
     setState(() => _isAnalyzing = true);
@@ -84,9 +76,9 @@ class _AIInsightsPageState extends State<AIInsightsPage>
         _isLoadingRecommendations = true;
       });
       await _loadAllData();
-      _showSnackBar('Análise atualizada com sucesso', isError: false);
+      _showSnack('Análise atualizada', isError: false);
     } catch (_) {
-      _showSnackBar('Erro ao atualizar análise');
+      _showSnack('Erro ao atualizar análise');
     } finally {
       if (mounted) setState(() => _isAnalyzing = false);
     }
@@ -248,22 +240,18 @@ class _AIInsightsPageState extends State<AIInsightsPage>
       final categories =
           await Injection.instance.categoryRepository.getCategories();
       if (mounted) setState(() => _categories = categories);
-    } catch (_) {
-      // Categorias são auxiliares — não bloqueia a tela
-    }
+    } catch (_) {}
   }
 
-  // ─── Ações ───
+  // ─── Classifications actions ───
 
   Future<void> _confirmClassification(
       AIClassificationEntity classification, String categoryId) async {
     if (_confirmingIds.contains(classification.id)) return;
     setState(() => _confirmingIds.add(classification.id));
-
     try {
       final result = await Injection.instance.aiInsightsRepository
           .confirmClassification(classification.id, categoryId);
-
       if (mounted) {
         final catName = _categories
                 .where((c) => c.id == categoryId)
@@ -271,30 +259,88 @@ class _AIInsightsPageState extends State<AIInsightsPage>
                 .firstOrNull ??
             result.confirmedCategoryName ??
             'categoria selecionada';
-
         final wasCorrected =
             categoryId != classification.suggestedCategoryId;
-
         setState(() {
           _pendingClassifications
               .removeWhere((c) => c.id == classification.id);
           _confirmingIds.remove(classification.id);
         });
-
-        _showSnackBar(
+        _showSnack(
           wasCorrected
               ? 'Corrigido para "$catName" — a IA vai aprender'
               : 'Classificado como "$catName"',
           isError: false,
         );
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
         setState(() => _confirmingIds.remove(classification.id));
-        _showSnackBar('Erro ao confirmar classificação');
+        _showSnack('Erro ao confirmar classificação');
       }
     }
   }
+
+  /// Busca o tipo da transação vinculada à classificação (com cache).
+  Future<TransactionType?> _fetchTransactionType(
+    AIClassificationEntity classification,
+  ) async {
+    final cached = _txTypeByClassification[classification.id];
+    if (cached != null) return cached;
+    final txId = classification.transactionId;
+    if (txId == null || txId.isEmpty) return null;
+    try {
+      final tx = await Injection.instance.transactionRepository
+          .getTransaction(txId);
+      _txTypeByClassification[classification.id] = tx.type;
+      return tx.type;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  CategoryType _categoryTypeFor(TransactionType tx) {
+    switch (tx) {
+      case TransactionType.income:
+        return CategoryType.income;
+      case TransactionType.expense:
+        return CategoryType.expense;
+      case TransactionType.transfer:
+        return CategoryType.transfer;
+    }
+  }
+
+  Future<void> _showCategorySelectorSheet(
+      AIClassificationEntity classification) async {
+    // Fix prévio: filtra por tipo da transação para impedir incompatibilidade
+    // (TRANSFER em INCOME, etc.). Mantido aqui.
+    final txType = await _fetchTransactionType(classification);
+    if (!mounted) return;
+    final CategoryType? allowedType =
+        txType != null ? _categoryTypeFor(txType) : null;
+    final available = allowedType == null
+        ? _categories
+        : _categories.where((c) => c.type == allowedType).toList();
+
+    final result = await showCategoryPickerSheet(
+      context,
+      categories: available,
+      highlightId: classification.suggestedCategoryId,
+      title: 'Escolha a categoria correta',
+      subtitle: allowedType != null
+          ? 'Apenas categorias de ${allowedType.label.toLowerCase()} são compatíveis com esta transação.'
+          : null,
+      // Não faz sentido escolher "Sem categoria" ao corrigir uma classificação:
+      // o objetivo é exatamente atribuir uma. A IA aprende com a correção.
+      allowNoCategory: false,
+    );
+    if (result?.category != null) {
+      HapticFeedback.mediumImpact();
+      _confirmClassification(classification, result!.category!.id);
+    }
+  }
+
+  // ─── Recommendations actions ───
 
   Future<void> _markRecommendationViewed(
       InvestmentRecommendationEntity rec) async {
@@ -321,9 +367,7 @@ class _AIInsightsPageState extends State<AIInsightsPage>
           }
         });
       }
-    } catch (_) {
-      // Falha silenciosa — não impacta UX
-    }
+    } catch (_) {}
   }
 
   Future<void> _markRecommendationFollowed(
@@ -350,25 +394,37 @@ class _AIInsightsPageState extends State<AIInsightsPage>
             );
           }
         });
-        _showSnackBar('Recomendação marcada como seguida', isError: false);
+        _showSnack('Recomendação marcada como seguida', isError: false);
       }
     } catch (_) {
-      _showSnackBar('Erro ao atualizar recomendação');
+      _showSnack('Erro ao atualizar recomendação');
     }
   }
 
-  void _showSnackBar(String message, {bool isError = true}) {
+  void _showSnack(String message, {bool isError = true}) {
     if (!mounted) return;
+    final tc = ThemeColors.of(context);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
-        backgroundColor: isError ? AppColors.error : AppColors.success,
+        backgroundColor: isError ? tc.neoNegative : tc.neoPositive,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
         margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
       ),
     );
+  }
+
+  String _fmtCurrency(double v) {
+    final f = v.abs().toStringAsFixed(2).replaceAll('.', ',');
+    final p = f.split(',');
+    final i = p[0].replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    return 'R\$ $i,${p[1]}';
+  }
+
+  String _monthLabel(DateTime d) {
+    return toBeginningOfSentenceCase(DateFormat('MMMM', 'pt_BR').format(d)) ??
+        '';
   }
 
   // ═══════════════════════════════════════════════
@@ -377,25 +433,40 @@ class _AIInsightsPageState extends State<AIInsightsPage>
 
   @override
   Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+
     return Scaffold(
-      backgroundColor:
-          isDark ? const Color(0xFF0A0A14) : const Color(0xFFF5F5F8),
+      backgroundColor: tc.neoBackground,
       body: SafeArea(
         child: Column(
           children: [
-            _buildHeader(),
-            const SizedBox(height: 12),
-            _buildTabBar(),
+            _buildHeader(tc),
+            const SizedBox(height: 4),
+            AppPillTabs(
+              labels: const ['Padrões', 'Previsões', 'Classif.', 'Invest.'],
+              selectedIndex: _selectedTab,
+              onChanged: (i) => setState(() => _selectedTab = i),
+              badges: [
+                _patterns.length,
+                _predictions.length,
+                _pendingClassifications.length,
+                _recommendations.length,
+              ],
+            ),
             const SizedBox(height: 12),
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildPatternsTab(),
-                  _buildPredictionsTab(),
-                  _buildClassificationsTab(),
-                  _buildRecommendationsTab(),
-                ],
+              child: RefreshIndicator(
+                onRefresh: _loadAllData,
+                color: tc.neoTeal,
+                child: IndexedStack(
+                  index: _selectedTab,
+                  children: [
+                    _buildPatternsTab(tc),
+                    _buildPredictionsTab(tc),
+                    _buildClassificationsTab(tc),
+                    _buildRecommendationsTab(tc),
+                  ],
+                ),
               ),
             ),
           ],
@@ -404,1097 +475,313 @@ class _AIInsightsPageState extends State<AIInsightsPage>
     );
   }
 
-  // ─── Header ───
-  Widget _buildHeader() {
+  Widget _buildHeader(ThemeColors tc) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-      child: Row(
+      padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          GestureDetector(
-            onTap: () => Navigator.pop(context),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1C1C2E)
-                    : const Color(0xFFEEEEF2),
-                borderRadius: BorderRadius.circular(12),
+          Row(
+            children: [
+              _SquareIconButton(
+                icon: Icons.arrow_back_ios_new_rounded,
+                onTap: () => Navigator.maybePop(context),
               ),
-              child: Icon(
-                Icons.arrow_back_rounded,
-                size: 20,
-                color: isDark ? Colors.white70 : Colors.black54,
+              const Spacer(),
+              _PillBadgeButton(
+                icon: Icons.auto_awesome_rounded,
+                tone: 'ai',
+                count: _pendingClassifications.length,
+                onTap: () => setState(() => _selectedTab = 2),
               ),
-            ),
+              const SizedBox(width: 8),
+              _SquareIconButton(
+                icon: _isAnalyzing
+                    ? Icons.hourglass_top_rounded
+                    : Icons.refresh_rounded,
+                onTap: _isAnalyzing ? () {} : _triggerAndRefresh,
+              ),
+            ],
           ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'AI Insights',
+          const SizedBox(height: 14),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                'AI Insights',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w700,
+                  color: tc.neoText,
+                  letterSpacing: -0.5,
+                  height: 1.1,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: tc.neoText,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'v1.2',
                   style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w700,
-                    color: isDark ? Colors.white : AppColors.textPrimary,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    color: tc.neoBackground,
+                    letterSpacing: 0.5,
                   ),
                 ),
-                Text(
-                  'Inteligência artificial aplicada às suas finanças',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? Colors.white38 : Colors.black38,
-                  ),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Inteligência artificial aplicada às suas finanças',
+            style: TextStyle(
+              fontSize: 13.5,
+              color: tc.neoTextMuted,
             ),
           ),
-          // Badge de pendentes
-          if (_pendingClassifications.isNotEmpty)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF7C5CFC).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
+        ],
+      ),
+    );
+  }
+
+  // ─── Tab: Padrões ───
+
+  Widget _buildPatternsTab(ThemeColors tc) {
+    if (_isLoadingPatterns) return _buildTabLoading(tc);
+    if (_patternsError != null) {
+      return _buildTabError(tc, _patternsError!, _loadPatterns);
+    }
+    if (_patterns.isEmpty) {
+      return _buildTabEmpty(
+        tc,
+        icon: Icons.insights_rounded,
+        title: 'Nenhum padrão detectado',
+        subtitle: 'A IA precisa de mais transações para identificar padrões.',
+      );
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      children: [
+        _patternsSummary(tc),
+        const SizedBox(height: 12),
+        for (final p in _patterns) ...[
+          _PatternCard(pattern: p),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  Widget _patternsSummary(ThemeColors tc) {
+    return Material(
+      color: tc.neoCard,
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+        child: Row(
+          children: [
+            IconBadge(
+              icon: Icons.auto_awesome_rounded,
+              tone: 'ai',
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.auto_fix_high_rounded,
-                      size: 14, color: Color(0xFF7C5CFC)),
-                  const SizedBox(width: 4),
                   Text(
-                    '${_pendingClassifications.length}',
-                    style: const TextStyle(
-                      fontSize: 12,
+                    '${_patterns.length} ${_patterns.length == 1 ? 'padrão detectado' : 'padrões detectados'}',
+                    style: TextStyle(
+                      fontSize: 14,
                       fontWeight: FontWeight.w700,
-                      color: Color(0xFF7C5CFC),
+                      color: tc.neoText,
                     ),
                   ),
+                  if (_patterns.first.detectedAt != null)
+                    Text(
+                      'Última análise: ${DateFormat('dd/MM HH:mm', 'pt_BR').format(_patterns.first.detectedAt!)}',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        color: tc.neoTextMuted,
+                      ),
+                    ),
                 ],
               ),
             ),
-          const SizedBox(width: 8),
-          // Botão de atualizar análise
-          GestureDetector(
-            onTap: _isAnalyzing ? null : _triggerAndRefresh,
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFF1C1C2E)
-                    : const Color(0xFFEEEEF2),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: _isAnalyzing
-                  ? Padding(
-                      padding: const EdgeInsets.all(10),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: isDark ? AppColors.darkAccent : AppColors.primary,
-                      ),
-                    )
-                  : Icon(
-                      Icons.refresh_rounded,
-                      size: 20,
-                      color: isDark ? Colors.white70 : Colors.black54,
-                    ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ─── Tab Bar ───
-  Widget _buildTabBar() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 20),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF1C1C2E) : const Color(0xFFEEEEF2),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: TabBar(
-        controller: _tabController,
-        indicator: BoxDecoration(
-          color: isDark ? AppColors.darkAccent : AppColors.primary,
-          borderRadius: BorderRadius.circular(10),
-        ),
-        indicatorSize: TabBarIndicatorSize.tab,
-        dividerColor: Colors.transparent,
-        labelColor: Colors.white,
-        unselectedLabelColor: isDark ? Colors.white38 : Colors.black45,
-        labelStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-        unselectedLabelStyle:
-            const TextStyle(fontSize: 11, fontWeight: FontWeight.w400),
-        padding: const EdgeInsets.all(3),
-        tabs: [
-          _buildTab('Padrões', _patterns.length, _isLoadingPatterns),
-          _buildTab('Previsões', _predictions.length, _isLoadingPredictions),
-          _buildTab('Classif.', _pendingClassifications.length,
-              _isLoadingClassifications),
-          _buildTab(
-              'Invest.', _recommendations.length, _isLoadingRecommendations),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTab(String label, int count, bool isLoading) {
-    return Tab(
-      height: 36,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Flexible(child: Text(label, overflow: TextOverflow.ellipsis)),
-          if (!isLoading && count > 0) ...[
-            const SizedBox(width: 4),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.2),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Text(
-                count > 99 ? '99+' : '$count',
-                style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════
-  //  PADRÕES DE GASTO
-  // ═══════════════════════════════════════
-
-  Widget _buildPatternsTab() {
-    return RefreshIndicator(
-      onRefresh: _loadPatterns,
-      color: isDark ? AppColors.darkAccent : AppColors.primary,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_patternsError != null) _buildErrorCard(_patternsError!),
-            _buildSectionTitle('Padrões Detectados'),
-            if (_isLoadingPatterns)
-              ..._buildShimmerCards(3)
-            else if (_patterns.isEmpty)
-              _buildEmptyCard(
-                icon: Icons.psychology_rounded,
-                title: 'Nenhum padrão detectado',
-                subtitle:
-                    'Continue registrando transações — a IA identificará padrões de gasto automaticamente.',
-              )
-            else
-              ..._patterns.map(_buildPatternCard),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPatternCard(SpendingPatternEntity pattern) {
-    final typeConfig = _patternTypeConfig(pattern.patternType);
-    final confidence = (pattern.significanceScore * 100).round();
-    final dateRange = _formatPatternDateRange(pattern);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
+            if (_patterns.first.modelVersion != null)
               Container(
-                width: 40,
-                height: 40,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: typeConfig.color.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: tc.badge('neutral').bg,
+                  borderRadius: BorderRadius.circular(6),
                 ),
-                child: Icon(typeConfig.icon, color: typeConfig.color, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 7, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: typeConfig.color.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            typeConfig.label,
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: typeConfig.color,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        // Confidence bar
-                        _buildConfidenceIndicator(confidence),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      pattern.description,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                        height: 1.4,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          if (dateRange != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Icon(Icons.date_range_rounded,
-                    size: 14,
-                    color: isDark ? Colors.white24 : Colors.black26),
-                const SizedBox(width: 6),
-                Text(
-                  dateRange,
+                child: Text(
+                  _patterns.first.modelVersion!,
                   style: TextStyle(
-                    fontSize: 11,
-                    color: isDark ? Colors.white30 : Colors.black38,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: tc.neoTextMuted,
                   ),
                 ),
-              ],
-            ),
+              ),
           ],
-        ],
+        ),
       ),
     );
   }
 
-  Widget _buildConfidenceIndicator(int percent) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 40,
-          height: 4,
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: LinearProgressIndicator(
-              value: percent / 100,
-              backgroundColor: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06),
-              valueColor: AlwaysStoppedAnimation(
-                percent >= 80
-                    ? AppColors.success
-                    : percent >= 50
-                        ? AppColors.warning
-                        : AppColors.error,
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          '$percent%',
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w600,
-            color: isDark ? Colors.white38 : Colors.black38,
-          ),
-        ),
-      ],
-    );
-  }
+  // ─── Tab: Previsões ───
 
-  _PatternTypeConfig _patternTypeConfig(String type) {
-    switch (type) {
-      case 'RECURRING':
-        return _PatternTypeConfig('Recorrente', Icons.replay_rounded,
-            const Color(0xFF3CADE8));
-      case 'INCREASING':
-        return _PatternTypeConfig('Em alta', Icons.trending_up_rounded,
-            AppColors.warning);
-      case 'DECREASING':
-        return _PatternTypeConfig('Em queda', Icons.trending_down_rounded,
-            AppColors.success);
-      case 'SEASONAL':
-        return _PatternTypeConfig('Sazonal', Icons.wb_sunny_rounded,
-            const Color(0xFFE8893C));
-      case 'ANOMALY':
-        return _PatternTypeConfig(
-            'Anomalia', Icons.warning_amber_rounded, AppColors.error);
-      default:
-        return _PatternTypeConfig(
-            type, Icons.insights_rounded, const Color(0xFF7C5CFC));
+  Widget _buildPredictionsTab(ThemeColors tc) {
+    if (_isLoadingPredictions) return _buildTabLoading(tc);
+    if (_predictionsError != null) {
+      return _buildTabError(tc, _predictionsError!, _loadPredictions);
     }
-  }
-
-  String? _formatPatternDateRange(SpendingPatternEntity pattern) {
-    if (pattern.detectedFrom == null && pattern.detectedTo == null) return null;
-    final fmt = DateFormat("dd MMM yyyy", 'pt_BR');
-    final from =
-        pattern.detectedFrom != null ? fmt.format(pattern.detectedFrom!) : '?';
-    final to =
-        pattern.detectedTo != null ? fmt.format(pattern.detectedTo!) : 'agora';
-    return '$from — $to';
-  }
-
-  // ═══════════════════════════════════════
-  //  PREVISÕES DE GASTO
-  // ═══════════════════════════════════════
-
-  Widget _buildPredictionsTab() {
-    return RefreshIndicator(
-      onRefresh: _loadPredictions,
-      color: isDark ? AppColors.darkAccent : AppColors.primary,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_predictionsError != null)
-              _buildErrorCard(_predictionsError!),
-            _buildSectionTitle('Previsão por Categoria'),
-            if (_isLoadingPredictions)
-              ..._buildShimmerCards(3)
-            else if (_predictions.isEmpty)
-              _buildEmptyCard(
-                icon: Icons.auto_graph_rounded,
-                title: 'Nenhuma previsão disponível',
-                subtitle:
-                    'A IA precisa de mais dados para gerar previsões de gasto.',
-              )
-            else ...[
-              if (_predictions.length >= 3) _buildPredictionChart(),
-              const SizedBox(height: 16),
-              ..._predictions.map(_buildPredictionCard),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPredictionChart() {
-    // Agrupa previsões por categoria e mostra barras previsto vs real
-    final displayItems = _predictions.take(6).toList();
-
-    return Container(
-      height: 220,
-      padding: const EdgeInsets.fromLTRB(12, 16, 16, 8),
-      decoration: _cardDecoration(),
-      child: BarChart(
-        BarChartData(
-          barGroups: displayItems.asMap().entries.map((entry) {
-            final i = entry.key;
-            final p = entry.value;
-            return BarChartGroupData(
-              x: i,
-              barRods: [
-                BarChartRodData(
-                  toY: p.predictedAmount,
-                  color: isDark ? AppColors.darkAccent : AppColors.primary,
-                  width: 14,
-                  borderRadius:
-                      const BorderRadius.vertical(top: Radius.circular(4)),
-                ),
-                if (p.actualAmount != null)
-                  BarChartRodData(
-                    toY: p.actualAmount!,
-                    color: p.actualAmount! > p.predictedAmount
-                        ? AppColors.error.withValues(alpha: 0.7)
-                        : AppColors.success.withValues(alpha: 0.7),
-                    width: 14,
-                    borderRadius:
-                        const BorderRadius.vertical(top: Radius.circular(4)),
-                  ),
-              ],
-            );
-          }).toList(),
-          gridData: FlGridData(
-            show: true,
-            drawVerticalLine: false,
-            horizontalInterval: _chartInterval(displayItems),
-            getDrawingHorizontalLine: (value) => FlLine(
-              color: isDark
-                  ? Colors.white.withValues(alpha: 0.05)
-                  : Colors.black.withValues(alpha: 0.04),
-              strokeWidth: 1,
-            ),
-          ),
-          titlesData: FlTitlesData(
-            leftTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false)),
-            rightTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false)),
-            topTitles: const AxisTitles(
-                sideTitles: SideTitles(showTitles: false)),
-            bottomTitles: AxisTitles(
-              sideTitles: SideTitles(
-                showTitles: true,
-                getTitlesWidget: (value, meta) {
-                  final i = value.toInt();
-                  if (i >= 0 && i < displayItems.length) {
-                    final name = displayItems[i].categoryName ?? '?';
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 6),
-                      child: Text(
-                        name.length > 6
-                            ? '${name.substring(0, 5)}.'
-                            : name,
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isDark ? Colors.white30 : Colors.black38,
-                        ),
-                      ),
-                    );
-                  }
-                  return const Text('');
-                },
-              ),
-            ),
-          ),
-          borderData: FlBorderData(show: false),
-        ),
-      ),
-    );
-  }
-
-  double _chartInterval(List<SpendingPredictionEntity> items) {
-    if (items.isEmpty) return 1000;
-    double max = 0;
-    for (final p in items) {
-      if (p.predictedAmount > max) max = p.predictedAmount;
-      if (p.actualAmount != null && p.actualAmount! > max) {
-        max = p.actualAmount!;
-      }
+    if (_predictions.isEmpty) {
+      return _buildTabEmpty(
+        tc,
+        icon: Icons.auto_graph_rounded,
+        title: 'Nenhuma previsão',
+        subtitle: 'A IA gera previsões com base no seu histórico.',
+      );
     }
-    if (max <= 0) return 1000;
-    return (max / 4).ceilToDouble();
-  }
 
-  Widget _buildPredictionCard(SpendingPredictionEntity prediction) {
-    final hasActual = prediction.actualAmount != null;
-    final accuracy = prediction.accuracyPercent;
-    final isOver =
-        hasActual && prediction.actualAmount! > prediction.predictedAmount;
-    final dateStr = DateFormat("MMM yyyy", 'pt_BR')
-        .format(prediction.predictionDate);
-
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: (isDark ? AppColors.darkAccent : AppColors.primary)
-                      .withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.auto_graph_rounded,
-                  color: isDark ? AppColors.darkAccent : AppColors.primary,
-                  size: 18,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      prediction.categoryName ?? 'Categoria',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                    Text(
-                      dateStr,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: isDark ? Colors.white30 : Colors.black38,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (accuracy != null)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: (accuracy >= 80
-                            ? AppColors.success
-                            : accuracy >= 50
-                                ? AppColors.warning
-                                : AppColors.error)
-                        .withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${accuracy.toStringAsFixed(0)}% precisa',
-                    style: TextStyle(
-                      fontSize: 10,
-                      fontWeight: FontWeight.w600,
-                      color: accuracy >= 80
-                          ? AppColors.success
-                          : accuracy >= 50
-                              ? AppColors.warning
-                              : AppColors.error,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          // Valores
-          Row(
-            children: [
-              Expanded(
-                child: _buildValueLabel(
-                  label: 'Previsto',
-                  value: _formatCurrency(prediction.predictedAmount),
-                  color: isDark ? AppColors.darkAccent : AppColors.primary,
-                ),
-              ),
-              if (hasActual)
-                Expanded(
-                  child: _buildValueLabel(
-                    label: 'Real',
-                    value: _formatCurrency(prediction.actualAmount!),
-                    color: isOver ? AppColors.error : AppColors.success,
-                  ),
-                ),
-              if (prediction.confidenceLower != null &&
-                  prediction.confidenceUpper != null)
-                Expanded(
-                  child: _buildValueLabel(
-                    label: 'Intervalo',
-                    value:
-                        '${_formatCurrencyShort(prediction.confidenceLower!)} — ${_formatCurrencyShort(prediction.confidenceUpper!)}',
-                    color: isDark ? Colors.white38 : Colors.black38,
-                  ),
-                ),
-            ],
-          ),
-        ],
-      ),
+    final totalPredicted =
+        _predictions.fold<double>(0, (s, p) => s + p.predictedAmount);
+    final totalInterval = _predictions.fold<double>(
+      0,
+      (s, p) => s +
+          ((p.confidenceUpper ?? p.predictedAmount) -
+                  (p.confidenceLower ?? p.predictedAmount))
+              .abs() /
+              2,
     );
-  }
+    final avgAccuracy = _avgAccuracy();
+    final firstDate = _predictions.first.predictionDate;
 
-  Widget _buildValueLabel({
-    required String label,
-    required String value,
-    required Color color,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 10,
-            color: isDark ? Colors.white30 : Colors.black38,
-          ),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-            color: color,
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ═══════════════════════════════════════
-  //  CLASSIFICAÇÕES
-  // ═══════════════════════════════════════
-
-  Widget _buildClassificationsTab() {
-    return RefreshIndicator(
-      onRefresh: _loadClassifications,
-      color: isDark ? AppColors.darkAccent : AppColors.primary,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_classificationsError != null)
-              _buildErrorCard(_classificationsError!),
-            _buildSectionTitle('Pendentes de Confirmação'),
-            if (_isLoadingClassifications)
-              ..._buildShimmerCards(3)
-            else if (_pendingClassifications.isEmpty)
-              _buildEmptyCard(
-                icon: Icons.auto_fix_high_rounded,
-                title: 'Tudo classificado',
-                subtitle:
-                    'Não há classificações pendentes. A IA classificará novas transações automaticamente.',
-              )
-            else
-              ..._pendingClassifications.map(_buildClassificationCard),
-            const SizedBox(height: 24),
-            _buildSectionTitle('Como funciona'),
-            _buildHowItWorksCard(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildClassificationCard(AIClassificationEntity classification) {
-    final confidence = (classification.confidenceScore * 100).round();
-    final isConfirming = _confirmingIds.contains(classification.id);
-
-    return AnimatedOpacity(
-      opacity: isConfirming ? 0.5 : 1.0,
-      duration: const Duration(milliseconds: 200),
-      child: Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF7C5CFC).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.auto_fix_high_rounded,
-                    color: Color(0xFF7C5CFC), size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      classification.originalText ?? 'Transação',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Row(
-                      children: [
-                        Text(
-                          'Sugestão: ',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.white30 : Colors.black38,
-                          ),
-                        ),
-                        Text(
-                          classification.suggestedCategoryName ?? '—',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: const Color(0xFF7C5CFC),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              _buildConfidenceIndicator(confidence),
-            ],
-          ),
-          const SizedBox(height: 14),
-          // Botões de ação
-          if (isConfirming)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: SizedBox(
-                  width: 20, height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: isDark ? AppColors.darkAccent : AppColors.primary,
-                  ),
-                ),
-              ),
-            )
-          else
-          Row(
-            children: [
-              // Confirmar sugestão
-              Expanded(
-                child: GestureDetector(
-                  onTap: () {
-                    if (classification.suggestedCategoryId != null) {
-                      HapticFeedback.mediumImpact();
-                      _confirmClassification(
-                          classification, classification.suggestedCategoryId!);
-                    }
-                  },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: AppColors.success.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                          color: AppColors.success.withValues(alpha: 0.2)),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        const Icon(Icons.check_rounded,
-                            size: 16, color: AppColors.success),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Confirmar',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.success,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              // Corrigir categoria
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _showCategorySelectorSheet(classification),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    decoration: BoxDecoration(
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.05)
-                          : Colors.black.withValues(alpha: 0.03),
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(
-                        color: isDark ? Colors.white10 : Colors.black12,
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.edit_rounded,
-                            size: 16,
-                            color: isDark ? Colors.white54 : Colors.black45),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Corrigir',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white54 : Colors.black45,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-      ),
-    );
-  }
-
-  void _showCategorySelectorSheet(AIClassificationEntity classification) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final bottomPadding = MediaQuery.of(ctx).padding.bottom;
-        return Container(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(ctx).size.height * 0.55,
-          ),
-          padding:
-              EdgeInsets.fromLTRB(20, 14, 20, bottomPadding > 0 ? 12 : 28),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF14142A) : Colors.white,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
+        HeroGradientCard(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.black12,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Escolha a categoria correta',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: isDark ? Colors.white : AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 16),
-              Flexible(
-                child: ListView.separated(
-                  shrinkWrap: true,
-                  itemCount: _categories.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 6),
-                  itemBuilder: (context, index) {
-                    final cat = _categories[index];
-                    final isSelected =
-                        cat.id == classification.suggestedCategoryId;
-                    return Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.pop(ctx);
-                          HapticFeedback.mediumImpact();
-                          _confirmClassification(classification, cat.id);
-                        },
-                        borderRadius: BorderRadius.circular(12),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 14, vertical: 12),
-                          decoration: BoxDecoration(
-                            color: isSelected
-                                ? const Color(0xFF7C5CFC)
-                                    .withValues(alpha: 0.08)
-                                : Colors.transparent,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: isSelected
-                                  ? const Color(0xFF7C5CFC)
-                                      .withValues(alpha: 0.2)
-                                  : (isDark
-                                      ? Colors.white10
-                                      : Colors.black.withValues(alpha: 0.06)),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              Text(
-                                cat.name,
-                                style: TextStyle(
-                                  fontSize: 15,
-                                  fontWeight: isSelected
-                                      ? FontWeight.w600
-                                      : FontWeight.w400,
-                                  color: isDark
-                                      ? Colors.white
-                                      : AppColors.textPrimary,
-                                ),
-                              ),
-                              const Spacer(),
-                              if (isSelected)
-                                const Icon(Icons.auto_fix_high_rounded,
-                                    size: 16, color: Color(0xFF7C5CFC)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  Widget _buildHowItWorksCard() {
-    final steps = [
-      (Icons.receipt_rounded, 'Transação criada', 'Sem categoria definida'),
-      (Icons.smart_toy_rounded, 'IA classifica', 'Sugere a mais provável'),
-      (Icons.check_circle_rounded, 'Você confirma', 'Aceite ou corrija'),
-    ];
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: _cardDecoration(),
-      child: Column(
-        children: steps.asMap().entries.map((entry) {
-          final (icon, title, desc) = entry.value;
-          final isLast = entry.key == steps.length - 1;
-          return Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Column(
-                children: [
-                  Container(
-                    width: 36,
-                    height: 36,
-                    decoration: BoxDecoration(
-                      color: (isDark
-                              ? AppColors.darkAccent
-                              : AppColors.primary)
-                          .withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Icon(icon,
-                        color:
-                            isDark ? AppColors.darkAccent : AppColors.primary,
-                        size: 18),
-                  ),
-                  if (!isLast)
-                    Container(
-                      width: 2,
-                      height: 20,
-                      color: isDark
-                          ? Colors.white.withValues(alpha: 0.06)
-                          : Colors.black.withValues(alpha: 0.04),
-                    ),
-                ],
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Padding(
-                  padding: EdgeInsets.only(bottom: isLast ? 0 : 12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(title,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: isDark ? Colors.white : AppColors.textPrimary,
-                          )),
-                      Text(desc,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? Colors.white30 : Colors.black38,
-                          )),
-                    ],
-                  ),
+              Text(
+                'PREVISÃO ${_monthLabel(firstDate).toUpperCase()}',
+                style: TextStyle(
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.1,
+                  color: Colors.white.withValues(alpha: 0.75),
                 ),
               ),
+              const SizedBox(height: 6),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    _fmtCurrency(totalPredicted),
+                    style: const TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: -0.8,
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      '± ${_fmtCurrency(totalInterval)}',
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.white.withValues(alpha: 0.7),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      size: 14, color: Colors.white.withValues(alpha: 0.8)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Acurácia média: ${avgAccuracy != null ? '${avgAccuracy.toStringAsFixed(0)}%' : '—'} · 90% intervalo confiança',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.white.withValues(alpha: 0.85),
+                    ),
+                  ),
+                ],
+              ),
             ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-
-  // ═══════════════════════════════════════
-  //  RECOMENDAÇÕES DE INVESTIMENTO
-  // ═══════════════════════════════════════
-
-  Widget _buildRecommendationsTab() {
-    return RefreshIndicator(
-      onRefresh: _loadRecommendations,
-      color: isDark ? AppColors.darkAccent : AppColors.primary,
-      child: SingleChildScrollView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 4, 20, 32),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_recommendationsError != null)
-              _buildErrorCard(_recommendationsError!),
-            _buildSectionTitle('Recomendações de Investimento'),
-            if (_isLoadingRecommendations)
-              ..._buildShimmerCards(3)
-            else if (_recommendations.isEmpty)
-              _buildEmptyCard(
-                icon: Icons.lightbulb_rounded,
-                title: 'Nenhuma recomendação',
-                subtitle:
-                    'Baseado no seu perfil, a IA sugerirá investimentos adequados conforme analisar seus dados.',
-              )
-            else
-              ..._recommendations.map(_buildRecommendationCard),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildRecommendationCard(InvestmentRecommendationEntity rec) {
-    final riskConfig = _riskConfig(rec.riskLevel ?? 0.5);
-
-    return GestureDetector(
-      onTap: () {
-        if (!rec.wasViewed) _markRecommendationViewed(rec);
-        _showRecommendationDetail(rec);
-      },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF14142A) : Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: !rec.wasViewed
-                ? const Color(0xFF7C5CFC).withValues(alpha: 0.3)
-                : (isDark
-                    ? const Color(0xFF252540)
-                    : const Color(0xFFEEEEF2)),
           ),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+        const SizedBox(height: 12),
+        for (final p in _predictions) ...[
+          _PredictionCard(prediction: p),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  double? _avgAccuracy() {
+    final withAcc = _predictions
+        .map((p) => p.accuracyPercent)
+        .where((a) => a != null)
+        .cast<double>()
+        .toList();
+    if (withAcc.isEmpty) return null;
+    return withAcc.reduce((a, b) => a + b) / withAcc.length;
+  }
+
+  // ─── Tab: Classificações ───
+
+  Widget _buildClassificationsTab(ThemeColors tc) {
+    if (_isLoadingClassifications) return _buildTabLoading(tc);
+    if (_classificationsError != null) {
+      return _buildTabError(tc, _classificationsError!, _loadClassifications);
+    }
+    if (_pendingClassifications.isEmpty) {
+      return _buildTabEmpty(
+        tc,
+        icon: Icons.check_circle_rounded,
+        title: 'Tudo em dia!',
+        subtitle: 'Nenhuma transação aguardando confirmação.',
+      );
+    }
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      children: [
+        Material(
+          color: tc.badge('ai').bg,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+            child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: riskConfig.color.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(12),
+                IconBadge(
+                  icon: Icons.auto_awesome_rounded,
+                  tone: 'ai',
+                  background: Colors.white.withValues(
+                    alpha: tc.isDark ? 0.06 : 0.6,
                   ),
-                  child:
-                      Icon(riskConfig.icon, color: riskConfig.color, size: 20),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -1502,392 +789,1207 @@ class _AIInsightsPageState extends State<AIInsightsPage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        rec.title,
+                        '${_pendingClassifications.length} ${_pendingClassifications.length == 1 ? 'transação aguardando' : 'transações aguardando'} confirmação',
                         style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white : AppColors.textPrimary,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w700,
+                          color: tc.neoText,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 2),
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: riskConfig.color.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              rec.typeLabel,
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: riskConfig.color,
-                              ),
-                            ),
-                          ),
-                          if (!rec.wasViewed) ...[
-                            const SizedBox(width: 6),
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFF7C5CFC),
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                          ],
-                          if (rec.wasFollowed == true) ...[
-                            const SizedBox(width: 6),
-                            Icon(Icons.check_circle_rounded,
-                                size: 14, color: AppColors.success),
-                          ],
-                        ],
+                      Text(
+                        'Confirme ou corrija — a IA aprende com cada correção.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: tc.neoTextMuted,
+                        ),
                       ),
                     ],
                   ),
                 ),
-                if (rec.potentialReturn != null)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        '+${rec.potentialReturn!.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.success,
-                        ),
-                      ),
-                      Text(
-                        'retorno est.',
-                        style: TextStyle(
-                          fontSize: 10,
-                          color: isDark ? Colors.white30 : Colors.black38,
-                        ),
-                      ),
-                    ],
-                  ),
               ],
             ),
-            const SizedBox(height: 10),
-            Text(
-              rec.description,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.white54 : AppColors.textSecondary,
-                height: 1.4,
+          ),
+        ),
+        const SizedBox(height: 12),
+        for (final c in _pendingClassifications) ...[
+          _ClassificationCard(
+            classification: c,
+            confirming: _confirmingIds.contains(c.id),
+            onConfirm: c.suggestedCategoryId != null
+                ? () => _confirmClassification(c, c.suggestedCategoryId!)
+                : null,
+            onCorrect: () => _showCategorySelectorSheet(c),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  // ─── Tab: Investimentos ───
+
+  Widget _buildRecommendationsTab(ThemeColors tc) {
+    if (_isLoadingRecommendations) return _buildTabLoading(tc);
+    if (_recommendationsError != null) {
+      return _buildTabError(tc, _recommendationsError!, _loadRecommendations);
+    }
+    if (_recommendations.isEmpty) {
+      return _buildTabEmpty(
+        tc,
+        icon: Icons.trending_up_rounded,
+        title: 'Nenhuma recomendação ainda',
+        subtitle:
+            'A IA gera sugestões com base no seu perfil e saldo disponível.',
+      );
+    }
+
+    final dominantRisk = _dominantRiskLevel();
+    final dominantType = _dominantRecommendationType();
+
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+      children: [
+        _RiskProfileCard(
+          recommendationType: dominantType,
+          riskScore: dominantRisk,
+        ),
+        const SizedBox(height: 14),
+        for (final r in _recommendations) ...[
+          _RecommendationCard(
+            recommendation: r,
+            onKnowMore: () {
+              if (!r.wasViewed) _markRecommendationViewed(r);
+            },
+            onMarkAsFollowed: () => _markRecommendationFollowed(r),
+          ),
+          const SizedBox(height: 10),
+        ],
+      ],
+    );
+  }
+
+  double? _dominantRiskLevel() {
+    final withRisk = _recommendations
+        .map((r) => r.riskLevel)
+        .where((r) => r != null)
+        .cast<double>()
+        .toList();
+    if (withRisk.isEmpty) return null;
+    return withRisk.reduce((a, b) => a + b) / withRisk.length;
+  }
+
+  String _dominantRecommendationType() {
+    final counts = <String, int>{};
+    for (final r in _recommendations) {
+      counts[r.recommendationType] = (counts[r.recommendationType] ?? 0) + 1;
+    }
+    if (counts.isEmpty) return 'MODERATE';
+    return counts.entries
+        .reduce((a, b) => a.value >= b.value ? a : b)
+        .key;
+  }
+
+  // ─── Tab states ───
+
+  Widget _buildTabLoading(ThemeColors tc) {
+    return Center(child: CircularProgressIndicator(color: tc.neoTeal));
+  }
+
+  Widget _buildTabError(
+      ThemeColors tc, String message, Future<void> Function() onRetry) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.55,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconBadge(
+                    icon: Icons.error_outline_rounded,
+                    tone: 'danger',
+                    size: 56,
+                    iconSize: 26,
+                    radius: 16,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    message,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 14, color: tc.neoTextMuted),
+                  ),
+                  const SizedBox(height: 14),
+                  TextButton(
+                    onPressed: () => onRetry(),
+                    style: TextButton.styleFrom(foregroundColor: tc.neoTeal),
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-          ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTabEmpty(
+    ThemeColors tc, {
+    required IconData icon,
+    required String title,
+    required String subtitle,
+  }) {
+    return ListView(
+      physics: const AlwaysScrollableScrollPhysics(),
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.55,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  IconBadge(
+                    icon: icon,
+                    tone: 'neutral',
+                    size: 64,
+                    iconSize: 28,
+                    radius: 18,
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: tc.neoTextMuted,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    subtitle,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: tc.neoTextFaint),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ═══════════════════════════════════════════════
+//  Pequenos widgets reutilizáveis
+// ═══════════════════════════════════════════════
+
+class _SquareIconButton extends StatelessWidget {
+  final IconData icon;
+  final VoidCallback onTap;
+  const _SquareIconButton({required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    return Material(
+      color: tc.neoCard,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          width: 38,
+          height: 38,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: tc.neoCardBorder),
+          ),
+          child: Icon(icon, size: 16, color: tc.neoText),
         ),
       ),
     );
   }
+}
 
-  void _showRecommendationDetail(InvestmentRecommendationEntity rec) {
-    final riskConfig = _riskConfig(rec.riskLevel ?? 0.5);
+class _PillBadgeButton extends StatelessWidget {
+  final IconData icon;
+  final String tone;
+  final int count;
+  final VoidCallback onTap;
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      isScrollControlled: true,
-      builder: (ctx) {
-        final bottomPadding = MediaQuery.of(ctx).padding.bottom;
-        return Container(
-          padding:
-              EdgeInsets.fromLTRB(20, 14, 20, bottomPadding > 0 ? 12 : 28),
-          decoration: BoxDecoration(
-            color: isDark ? const Color(0xFF14142A) : Colors.white,
-            borderRadius:
-                const BorderRadius.vertical(top: Radius.circular(24)),
-          ),
-          child: Column(
+  const _PillBadgeButton({
+    required this.icon,
+    required this.tone,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final pair = tc.badge(tone);
+    return Material(
+      color: pair.bg,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          height: 38,
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Row(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white24 : Colors.black12,
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Row(
-                children: [
-                  Container(
-                    width: 48,
-                    height: 48,
-                    decoration: BoxDecoration(
-                      color: riskConfig.color.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(riskConfig.icon,
-                        color: riskConfig.color, size: 24),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Text(
-                      rec.title,
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                        color: isDark ? Colors.white : AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
+              Icon(icon, color: pair.fg, size: 16),
+              const SizedBox(width: 6),
               Text(
-                rec.description,
+                '$count',
                 style: TextStyle(
-                  fontSize: 14,
-                  color: isDark ? Colors.white60 : AppColors.textSecondary,
-                  height: 1.5,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: pair.fg,
                 ),
               ),
-              if (rec.allocationSuggestion != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: isDark
-                        ? Colors.white.withValues(alpha: 0.04)
-                        : Colors.black.withValues(alpha: 0.02),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.06),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Pattern card ───
+
+class _PatternCard extends StatelessWidget {
+  final SpendingPatternEntity pattern;
+  const _PatternCard({required this.pattern});
+
+  ({String label, String labelEn, Color color, IconData icon, String tone})
+      _config(String type, ThemeColors tc) {
+    switch (type) {
+      case 'INCREASING':
+        return (
+          label: 'CRESCENTE',
+          labelEn: 'INCREASING',
+          color: tc.neoNegative,
+          icon: Icons.trending_up_rounded,
+          tone: 'danger',
+        );
+      case 'DECREASING':
+        return (
+          label: 'EM QUEDA',
+          labelEn: 'DECREASING',
+          color: tc.neoPositive,
+          icon: Icons.trending_down_rounded,
+          tone: 'success',
+        );
+      case 'RECURRING':
+        return (
+          label: 'RECORRENTE',
+          labelEn: 'RECURRING',
+          color: const Color(0xFF3D77D6),
+          icon: Icons.repeat_rounded,
+          tone: 'info',
+        );
+      case 'ANOMALY':
+        return (
+          label: 'ANOMALIA',
+          labelEn: 'ANOMALY',
+          color: tc.neoAttention,
+          icon: Icons.warning_amber_rounded,
+          tone: 'warning',
+        );
+      case 'SEASONAL':
+        return (
+          label: 'SAZONAL',
+          labelEn: 'SEASONAL',
+          color: tc.neoAi,
+          icon: Icons.wb_sunny_rounded,
+          tone: 'ai',
+        );
+      default:
+        return (
+          label: type,
+          labelEn: type,
+          color: tc.neoTextMuted,
+          icon: Icons.insights_rounded,
+          tone: 'neutral',
+        );
+    }
+  }
+
+  String _periodLabel() {
+    if (pattern.detectedFrom == null && pattern.detectedTo == null) return '';
+    final fmt = DateFormat('dd MMM', 'pt_BR');
+    if (pattern.detectedFrom != null && pattern.detectedTo != null) {
+      return '${fmt.format(pattern.detectedFrom!)} – ${fmt.format(pattern.detectedTo!)}';
+    }
+    final d = pattern.detectedFrom ?? pattern.detectedTo!;
+    return fmt.format(d);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final cfg = _config(pattern.patternType, tc);
+    final score = pattern.significanceScore.clamp(0.0, 1.0);
+    final percent = (score * 100).round();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: tc.neoCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.neoCardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: tc.neoCardShadow,
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconBadge(icon: cfg.icon, tone: cfg.tone),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${cfg.label} · ${cfg.labelEn}',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.8,
+                        color: cfg.color,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      pattern.description,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: tc.neoText,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                'Significância',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tc.neoTextMuted,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _periodLabel(),
+                style: TextStyle(
+                  fontSize: 11,
+                  color: tc.neoTextFaint,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: score,
+                  minHeight: 5,
+                  backgroundColor: cfg.color.withValues(alpha: 0.15),
+                  valueColor: AlwaysStoppedAnimation(cfg.color),
+                ),
+              ),
+              Positioned(
+                right: 0,
+                top: -2,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 4, vertical: 0),
+                  child: Text(
+                    '$percent',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: cfg.color,
                     ),
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Sugestão de alocação',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? Colors.white38 : Colors.black45,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        rec.allocationSuggestion!,
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: isDark ? Colors.white : AppColors.textPrimary,
-                          height: 1.4,
-                        ),
-                      ),
-                    ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Prediction card ───
+
+class _PredictionCard extends StatelessWidget {
+  final SpendingPredictionEntity prediction;
+  const _PredictionCard({required this.prediction});
+
+  Color _accuracyColor(double? acc, ThemeColors tc) {
+    if (acc == null) return tc.neoTextMuted;
+    if (acc >= 85) return tc.neoPositive;
+    if (acc >= 70) return tc.neoAttention;
+    return tc.neoNegative;
+  }
+
+  String _fmtAmount(double v) {
+    final f = v.toStringAsFixed(2).replaceAll('.', ',');
+    final p = f.split(',');
+    final i = p[0].replaceAllMapped(
+        RegExp(r'(\d)(?=(\d{3})+(?!\d))'), (m) => '${m[1]}.');
+    return 'R\$ $i,${p[1]}';
+  }
+
+  String _toneFromName(String? name) {
+    final n = (name ?? '').toLowerCase();
+    if (n.contains('aliment')) return 'food';
+    if (n.contains('transp')) return 'transport';
+    if (n.contains('lazer')) return 'entertainment';
+    if (n.contains('compras')) return 'shopping';
+    if (n.contains('saúde') || n.contains('saude')) return 'health';
+    if (n.contains('contas') || n.contains('aluguel')) return 'bills';
+    return 'neutral';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final acc = prediction.accuracyPercent;
+    final accColor = _accuracyColor(acc, tc);
+    final lower = prediction.confidenceLower ?? prediction.predictedAmount;
+    final upper = prediction.confidenceUpper ?? prediction.predictedAmount;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: tc.neoCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.neoCardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: tc.neoCardShadow,
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              IconBadge(
+                icon: Icons.label_rounded,
+                tone: _toneFromName(prediction.categoryName),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  prediction.categoryName ?? 'Sem categoria',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: tc.neoText,
                   ),
                 ),
-              ],
-              const SizedBox(height: 20),
-              // Ação: marcar como seguida
-              if (rec.wasFollowed != true)
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      Navigator.pop(ctx);
-                      _markRecommendationFollowed(rec);
-                    },
-                    icon: const Icon(Icons.check_rounded, size: 20),
-                    label: const Text('Seguir recomendação',
-                        style: TextStyle(
-                            fontSize: 15, fontWeight: FontWeight.w600)),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          isDark ? AppColors.darkAccent : AppColors.primary,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14)),
-                      elevation: 0,
+              ),
+              if (acc != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: accColor.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    '${acc.toStringAsFixed(0)}% acc',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: accColor,
                     ),
                   ),
                 ),
             ],
           ),
-        );
-      },
-    );
-  }
-
-  _RiskConfig _riskConfig(double riskLevel) {
-    if (riskLevel <= 0.3) {
-      return _RiskConfig(
-          'Baixo', Icons.shield_rounded, AppColors.success);
-    } else if (riskLevel <= 0.6) {
-      return _RiskConfig('Médio', Icons.speed_rounded, AppColors.warning);
-    } else {
-      return _RiskConfig(
-          'Alto', Icons.local_fire_department_rounded, AppColors.error);
-    }
-  }
-
-  // ═══════════════════════════════════════
-  //  WIDGETS COMPARTILHADOS
-  // ═══════════════════════════════════════
-
-  Widget _buildSectionTitle(String title) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Text(
-        title,
-        style: TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w700,
-          color: isDark ? Colors.white : AppColors.textPrimary,
-        ),
+          const SizedBox(height: 12),
+          Stack(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(3),
+                child: LinearProgressIndicator(
+                  value: 0.55,
+                  minHeight: 6,
+                  backgroundColor: tc.neoTeal.withValues(alpha: 0.15),
+                  valueColor: AlwaysStoppedAnimation(tc.neoTeal),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                _fmtAmount(lower),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: tc.neoTextMuted,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${_fmtAmount(prediction.predictedAmount)} prev.',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: tc.neoTeal,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                _fmtAmount(upper),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: tc.neoTextMuted,
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _buildEmptyCard({
-    required IconData icon,
-    required String title,
-    required String subtitle,
-  }) {
+// ─── Classification card ───
+
+class _ClassificationCard extends StatelessWidget {
+  final AIClassificationEntity classification;
+  final bool confirming;
+  final VoidCallback? onConfirm;
+  final VoidCallback onCorrect;
+
+  const _ClassificationCard({
+    required this.classification,
+    required this.confirming,
+    required this.onConfirm,
+    required this.onCorrect,
+  });
+
+  String _toneFromName(String? name) {
+    final n = (name ?? '').toLowerCase();
+    if (n.contains('aliment')) return 'food';
+    if (n.contains('transp')) return 'transport';
+    if (n.contains('lazer')) return 'entertainment';
+    if (n.contains('compras')) return 'shopping';
+    if (n.contains('saúde') || n.contains('saude')) return 'health';
+    if (n.contains('contas') || n.contains('aluguel')) return 'bills';
+    if (n.contains('transfer')) return 'transfer';
+    if (n.contains('salár') || n.contains('salario')) return 'salary';
+    return 'neutral';
+  }
+
+  IconData _iconFromName(String? name) {
+    final n = (name ?? '').toLowerCase();
+    if (n.contains('aliment')) return Icons.restaurant_rounded;
+    if (n.contains('transp') || n.contains('uber')) {
+      return Icons.directions_car_rounded;
+    }
+    if (n.contains('lazer')) return Icons.sports_esports_rounded;
+    if (n.contains('compras') || n.contains('shopping')) {
+      return Icons.shopping_cart_rounded;
+    }
+    if (n.contains('saúde') || n.contains('saude')) {
+      return Icons.medical_services_rounded;
+    }
+    if (n.contains('transfer')) return Icons.swap_horiz_rounded;
+    return Icons.label_rounded;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final confidence = (classification.confidenceScore * 100).round();
+    final confidenceColor = confidence >= 90
+        ? tc.neoPositive
+        : confidence >= 70
+            ? tc.neoAttention
+            : tc.neoNegative;
+
     return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-      decoration: _cardDecoration(),
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: tc.neoCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.neoCardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: tc.neoCardShadow,
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // Header: tx description + suggested category
+          Row(
+            children: [
+              IconBadge(
+                icon: Icons.receipt_long_rounded,
+                tone: 'neutral',
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      classification.originalText ??
+                          'Transação sem descrição',
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w700,
+                        color: tc.neoText,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (classification.classifiedAt != null)
+                      Text(
+                        DateFormat('dd/MM · HH:mm', 'pt_BR')
+                            .format(classification.classifiedAt!),
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: tc.neoTextMuted,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           Container(
-            width: 64,
-            height: 64,
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
             decoration: BoxDecoration(
-              color: isDark
-                  ? const Color(0xFF1C1C2E)
-                  : const Color(0xFFEEEEF2),
-              borderRadius: BorderRadius.circular(18),
+              color: tc.badge('ai').bg,
+              borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(icon,
-                size: 28, color: isDark ? Colors.white12 : Colors.black12),
+            child: Row(
+              children: [
+                IconBadge(
+                  icon:
+                      _iconFromName(classification.suggestedCategoryName),
+                  tone: _toneFromName(
+                      classification.suggestedCategoryName),
+                  size: 34,
+                  iconSize: 16,
+                  radius: 10,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'SUGESTÃO DA IA',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.7,
+                          color: tc.neoAi,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        classification.suggestedCategoryName ?? '—',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: tc.neoText,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '$confidence%',
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: confidenceColor,
+                      ),
+                    ),
+                    Text(
+                      'CONFIANÇA',
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: tc.neoTextFaint,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: confirming ? null : onCorrect,
+                  icon: Icon(Icons.edit_outlined,
+                      size: 16, color: tc.neoText),
+                  label: Text(
+                    'Corrigir',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: tc.neoText,
+                    ),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: tc.neoCardBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    minimumSize: const Size(0, 42),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: confirming ? null : onConfirm,
+                  icon: confirming
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Icon(Icons.check_rounded,
+                          size: 16, color: Colors.white),
+                  label: Text(
+                    confirming ? 'Salvando...' : 'Confirmar',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: tc.neoTeal,
+                    minimumSize: const Size(0, 42),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Investment cards ───
+
+class _RiskProfileCard extends StatelessWidget {
+  final String recommendationType;
+  final double? riskScore;
+  const _RiskProfileCard({
+    required this.recommendationType,
+    required this.riskScore,
+  });
+
+  String _profileLabel() {
+    switch (recommendationType.toUpperCase()) {
+      case 'CONSERVATIVE':
+        return 'Conservador';
+      case 'MODERATE':
+        return 'Moderado';
+      case 'AGGRESSIVE':
+        return 'Arrojado';
+      default:
+        return 'Personalizado';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final score = (riskScore ?? 3.0).clamp(0.0, 10.0);
+    final dots = score.round();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
+      decoration: BoxDecoration(
+        color: tc.neoCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.neoCardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: tc.neoCardShadow,
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                'SEU PERFIL',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.0,
+                  color: tc.neoTextFaint,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tc.neoAttention.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'RISCO ${score.toStringAsFixed(0)}/10',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    color: tc.neoAttention,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
           Text(
-            title,
+            _profileLabel(),
             style: TextStyle(
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              color: isDark ? Colors.white38 : Colors.black26,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: tc.neoText,
+              letterSpacing: -0.3,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 12),
+          Row(
+            children: List.generate(10, (i) {
+              final filled = i < dots;
+              return Expanded(
+                child: Padding(
+                  padding: EdgeInsets.only(right: i < 9 ? 4 : 0),
+                  child: Container(
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: filled
+                          ? tc.neoAttention
+                          : tc.neoTextFaint.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecommendationCard extends StatelessWidget {
+  final InvestmentRecommendationEntity recommendation;
+  final VoidCallback onKnowMore;
+  final VoidCallback onMarkAsFollowed;
+
+  const _RecommendationCard({
+    required this.recommendation,
+    required this.onKnowMore,
+    required this.onMarkAsFollowed,
+  });
+
+  ({String label, Color color}) _typeConfig(String type, ThemeColors tc) {
+    switch (type.toUpperCase()) {
+      case 'CONSERVATIVE':
+        return (label: 'CONSERVADOR', color: tc.neoPositive);
+      case 'MODERATE':
+        return (label: 'MODERADO', color: tc.neoAi);
+      case 'AGGRESSIVE':
+        return (label: 'ARROJADO', color: tc.neoNegative);
+      default:
+        return (label: 'PERSONALIZADO', color: tc.neoTeal);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tc = ThemeColors.of(context);
+    final cfg = _typeConfig(recommendation.recommendationType, tc);
+    final risk = (recommendation.riskLevel ?? 0).clamp(0.0, 10.0);
+    final ret = recommendation.potentialReturn;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
+      decoration: BoxDecoration(
+        color: tc.neoCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.neoCardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: tc.neoCardShadow,
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: cfg.color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  cfg.label,
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                    color: cfg.color,
+                  ),
+                ),
+              ),
+              if (recommendation.allocationSuggestion != null) ...[
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    recommendation.allocationSuggestion!,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: tc.neoTextMuted,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+              if (!recommendation.wasViewed)
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: tc.neoAi,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
           Text(
-            subtitle,
-            textAlign: TextAlign.center,
+            recommendation.title,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: tc.neoText,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            recommendation.description,
             style: TextStyle(
               fontSize: 13,
-              color: isDark ? Colors.white70 : Colors.black26,
+              color: tc.neoTextMuted,
               height: 1.4,
             ),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildErrorCard(String message) {
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: AppColors.error.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.error.withValues(alpha: 0.2)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.error_outline_rounded,
-              color: AppColors.error, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              message,
-              style: TextStyle(
-                fontSize: 13,
-                color: isDark ? Colors.white70 : Colors.black87,
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RETORNO POTENCIAL',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: tc.neoTextFaint,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      ret != null
+                          ? '+${ret.toStringAsFixed(1)}% a.a.'
+                          : '—',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: tc.neoPositive,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'RISCO',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.6,
+                        color: tc.neoTextFaint,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: risk / 10.0,
+                              minHeight: 5,
+                              backgroundColor: tc.neoTextFaint
+                                  .withValues(alpha: 0.18),
+                              valueColor:
+                                  AlwaysStoppedAnimation(tc.neoAttention),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Text(
+                          risk.toStringAsFixed(1),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: tc.neoText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: onKnowMore,
+                  style: OutlinedButton.styleFrom(
+                    side: BorderSide(color: tc.neoCardBorder),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    minimumSize: const Size(0, 42),
+                  ),
+                  child: Text(
+                    'Saber mais',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: tc.neoText,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: recommendation.wasFollowed == true
+                      ? null
+                      : onMarkAsFollowed,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: tc.neoTeal,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size(0, 42),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    elevation: 0,
+                    textStyle: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: Text(
+                    recommendation.wasFollowed == true
+                        ? 'Seguindo ✓'
+                        : 'Marcar como seguida',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
     );
   }
-
-  List<Widget> _buildShimmerCards(int count) {
-    return List.generate(count, (i) {
-      return Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        height: 90,
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF14142A) : const Color(0xFFEEEEF2),
-          borderRadius: BorderRadius.circular(18),
-        ),
-      );
-    });
-  }
-
-  BoxDecoration _cardDecoration() {
-    return BoxDecoration(
-      color: isDark ? const Color(0xFF14142A) : Colors.white,
-      borderRadius: BorderRadius.circular(18),
-      border: Border.all(
-        color: isDark ? const Color(0xFF252540) : const Color(0xFFEEEEF2),
-      ),
-    );
-  }
-
-  // ─── Utils ───
-
-  String _formatCurrency(double value) {
-    final formatted = value.toStringAsFixed(2).replaceAll('.', ',');
-    final parts = formatted.split(',');
-    final intPart = parts[0].replaceAllMapped(
-      RegExp(r'(\d)(?=(\d{3})+(?!\d))'),
-      (match) => '${match[1]}.',
-    );
-    return 'R\$ $intPart,${parts[1]}';
-  }
-
-  String _formatCurrencyShort(double value) {
-    if (value >= 1000) {
-      return 'R\$ ${(value / 1000).toStringAsFixed(1)}k';
-    }
-    return _formatCurrency(value);
-  }
-}
-
-// ─── Config classes ───
-
-class _PatternTypeConfig {
-  final String label;
-  final IconData icon;
-  final Color color;
-  const _PatternTypeConfig(this.label, this.icon, this.color);
-}
-
-class _RiskConfig {
-  final String label;
-  final IconData icon;
-  final Color color;
-  const _RiskConfig(this.label, this.icon, this.color);
 }

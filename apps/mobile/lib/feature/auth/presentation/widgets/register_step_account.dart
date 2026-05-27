@@ -43,8 +43,10 @@ class _RegisterStepAccountState extends State<RegisterStepAccount> {
     final password = widget.passwordController.text;
     double strength = 0;
 
-    if (password.length >= 6) strength += 0.2;
-    if (password.length >= 10) strength += 0.1;
+    // Bate com o mínimo do backend (>=8) para não dar "Forte" em
+    // senhas que o servidor vai rejeitar.
+    if (password.length >= 8) strength += 0.2;
+    if (password.length >= 12) strength += 0.1;
     if (RegExp(r'[A-Z]').hasMatch(password)) strength += 0.2;
     if (RegExp(r'[a-z]').hasMatch(password)) strength += 0.1;
     if (RegExp(r'[0-9]').hasMatch(password)) strength += 0.2;
@@ -179,8 +181,20 @@ class _RegisterStepAccountState extends State<RegisterStepAccount> {
               if (value == null || value.isEmpty) {
                 return 'Informe sua senha';
               }
-              if (value.length < 6) {
-                return 'A senha deve ter pelo menos 6 caracteres';
+              // Regras alinhadas com o backend (RegisterRequest.password):
+              //  - mínimo 8, máximo 100
+              //  - pelo menos uma letra e um dígito
+              if (value.length < 8) {
+                return 'A senha deve ter pelo menos 8 caracteres';
+              }
+              if (value.length > 100) {
+                return 'A senha deve ter no máximo 100 caracteres';
+              }
+              if (!RegExp(r'[A-Za-z]').hasMatch(value)) {
+                return 'A senha deve conter pelo menos uma letra';
+              }
+              if (!RegExp(r'\d').hasMatch(value)) {
+                return 'A senha deve conter pelo menos um número';
               }
               return null;
             },

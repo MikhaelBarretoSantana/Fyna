@@ -23,6 +23,9 @@ import 'package:fyna/feature/recurring/domain/repositories/recurring_repository.
 import 'package:fyna/feature/goals/data/datasource/goal_remote_datasource.dart';
 import 'package:fyna/feature/goals/data/repositories/goal_repository_impl.dart';
 import 'package:fyna/feature/goals/domain/repositories/goal_repository.dart';
+import 'package:fyna/feature/budget/data/datasource/budget_remote_datasource.dart';
+import 'package:fyna/feature/budget/data/repositories/budget_repository_impl.dart';
+import 'package:fyna/feature/budget/domain/repositories/budget_repository.dart';
 import 'package:fyna/feature/notifications/data/datasource/notification_remote_datasource.dart';
 import 'package:fyna/feature/notifications/data/datasource/fcm_remote_datasource.dart';
 import 'package:fyna/feature/notifications/data/repositories/notification_repository_impl.dart';
@@ -65,6 +68,10 @@ class Injection {
   // Goals
   late final GoalRemoteDatasource goalRemoteDatasource;
   late final GoalRepository goalRepository;
+
+  // Budgets
+  late final BudgetRemoteDatasource budgetRemoteDatasource;
+  late final BudgetRepository budgetRepository;
 
   // Notifications
   late final NotificationRemoteDatasource notificationRemoteDatasource;
@@ -125,6 +132,11 @@ class Injection {
     // Goals
     goalRemoteDatasource = GoalRemoteDatasource(dioClient.dio);
     goalRepository = GoalRepositoryImpl(datasource: goalRemoteDatasource);
+
+    // Budgets
+    budgetRemoteDatasource = BudgetRemoteDatasource(dioClient.dio);
+    budgetRepository =
+        BudgetRepositoryImpl(datasource: budgetRemoteDatasource);
 
     // Notifications
     notificationRemoteDatasource = NotificationRemoteDatasource(dioClient.dio);
