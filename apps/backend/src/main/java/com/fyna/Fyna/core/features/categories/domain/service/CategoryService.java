@@ -4,6 +4,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Stream;
 
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,6 +50,7 @@ public class CategoryService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "system-categories")
     public List<CategoryResponse> getSystemCategories() {
         return categoryRepository.findByUserIsNullAndIsSystemTrueAndIsActiveTrue().stream()
                 .map(CategoryResponse::from)
@@ -54,6 +58,7 @@ public class CategoryService {
     }
 
     @Transactional(readOnly = true)
+    @Cacheable(value = "category-by-type", key = "#userId.toString() + '::' + #type.name()")
     public List<CategoryResponse> getCategoriesByType(UUID userId, CategoriesTypes type) {
         List<Categories> systemByType = categoryRepository.findByTypeAndIsActiveTrue(type).stream()
                 .filter(c -> c.getUser() == null)
@@ -76,6 +81,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(value = "category-by-type", allEntries = true)
     public CategoryResponse createCategory(UUID userId, CreateCategoryRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
@@ -110,6 +116,7 @@ public class CategoryService {
     }
 
     @Transactional
+    @CacheEvict(value = "category-by-type", allEntries = true)
     public CategoryResponse updateCategory(UUID categoryId, UUID userId, UpdateCategoryRequest request) {
         Categories category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
@@ -133,6 +140,10 @@ public class CategoryService {
     }
 
     @Transactional
+    @Caching(evict = {
+            @CacheEvict(value = "category-by-type", allEntries = true),
+            @CacheEvict(value = "system-categories", allEntries = true)
+    })
     public void deleteCategory(UUID categoryId, UUID userId) {
         Categories category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", "id", categoryId));
