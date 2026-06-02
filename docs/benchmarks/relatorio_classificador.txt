@@ -1,0 +1,60 @@
+===== Relatorio do classificador =====
+Total enviado:           300
+Sem predicao retornada:  0
+Avaliados:               300
+
+Acuracia global:         0.5067
+F1 (macro):              0.3576
+Precisao (macro):        0.4259
+Revocacao (macro):       0.3374
+
+Latencia p50:            26.2 ms
+Latencia p95:            36.2 ms
+
+----- Por categoria -----
+                           precision    recall  f1-score   support
+
+                 Academia     0.5385    0.7778    0.6364         9
+              Alimentação     0.0000    0.0000    0.0000         0
+                  Aluguel     0.3333    0.5556    0.4167         9
+Aplicativos de Transporte     0.8000    0.3333    0.4706        12
+                   Beleza     0.0000    0.0000    0.0000         0
+              Combustível     1.0000    1.0000    1.0000        13
+                  Compras     0.0000    0.0000    0.0000         0
+               Condomínio     0.8571    0.6667    0.7500         9
+                   Contas     0.0000    0.0000    0.0000         0
+        Cuidados Pessoais     0.0000    0.0000    0.0000         0
+                   Cursos     0.8571    0.4286    0.5714        14
+                 Educação     0.7500    0.6000    0.6667        10
+              Eletrônicos     0.0000    0.0000    0.0000         0
+                  Energia     1.0000    0.6000    0.7500        10
+                 Farmácia     0.0000    0.0000    0.0000        13
+               Financeiro     0.0000    0.0000    0.0000         0
+                Freelance     0.7500    1.0000    0.8571         9
+                 Impostos     0.0000    0.0000    0.0000         0
+                 Internet     0.6923    0.8182    0.7500        11
+            Investimentos     1.0000    0.3333    0.5000        18
+                    Jogos     0.6667    0.6667    0.6667        12
+                    Lazer     0.0000    0.0000    0.0000        16
+                   Livros     1.0000    0.7000    0.8235        10
+          Manutenção Casa     0.0000    0.0000    0.0000         0
+          Outras Despesas     0.0000    0.0000    0.0000         0
+          Outras Receitas     0.0000    0.0000    0.0000         0
+           Plano de Saúde     0.8333    0.4167    0.5556        12
+                 Presente     0.0000    0.0000    0.0000         0
+                Reembolso     0.5714    0.8000    0.6667        10
+             Restaurantes     0.8000    0.7059    0.7500        17
+                   Roupas     0.0000    0.0000    0.0000         0
+                  Salário     0.4000    0.1250    0.1905        16
+                    Saúde     0.2667    0.2500    0.2581        16
+                Streaming     0.6923    0.6429    0.6667        14
+             Supermercado     1.0000    0.2105    0.3478        19
+                 Telefone     0.0000    0.0000    0.0000         0
+       Transporte Público     0.8000    0.7273    0.7619        11
+                  Viagens     0.0000    0.0000    0.0000         0
+                     Água     1.0000    0.8000    0.8889        10
+
+                 accuracy                         0.5067       300
+                macro avg     0.4259    0.3374    0.3576       300
+             weighted avg     0.6850    0.5067    0.5490       300
+

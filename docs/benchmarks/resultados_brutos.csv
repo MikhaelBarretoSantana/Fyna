@@ -1,0 +1,301 @@
+description,expected,predicted,confidence,post_latency_ms,classify_latency_ms,tx_id,failed
+Mensalidade faculdade,Educação,Academia,0.7865,53.72680000436958,55.82579999463633,2357441f-516b-49fe-b2f7-522e804399d7,False
+Cosan água,Água,Água,0.9295,25.64429999620188,71.60490000387654,3debe1b7-fb51-4669-96dd-acfe34b0674d,False
+Sacolão da feira,Supermercado,Compras,0.715,40.65680000348948,39.79779999644961,2e99c7f5-a230-4a9c-86ba-480cf398db30,False
+Diesel posto rodovia,Combustível,Combustível,0.696,73.45799999893643,36.22729999187868,1f016f47-7e92-4788-ae95-76d2c71e1deb,False
+Trabalho extra freelance,Freelance,Freelance,0.7845,59.66199999966193,29.269100006786175,ce28a31e-d76a-4b05-a530-fa09d449495b,False
+Cota condominial,Condomínio,Condomínio,0.5472,141.10649999929592,29.903499991632998,17c6e2f4-4b89-4bc6-9960-75c21fc38c75,False
+Show banda,Lazer,Roupas,0.442,76.17190000019036,26.019600001745857,8bd49d85-64b2-4912-945c-8e0268085cf3,False
+Livro técnico programação,Livros,Livros,0.5744,66.2534000002779,23.386700006085448,b7cc288b-5e90-4869-8d55-bb039d3ef57e,False
+Adiantamento salarial,Salário,Reembolso,0.5471,68.49720000172965,34.03119998984039,321c856a-f3e3-4e77-997c-614497868293,False
+Vitaminas farmácia,Farmácia,Saúde,0.4772,65.62989999656565,33.375300001353025,e3bdfb5d-2078-4940-b2d0-687c02661c56,False
+Cupom LCI,Investimentos,Presente,0.3649,76.65080000879243,37.61839999060612,67cf1541-23d0-4cfe-b0d7-768e5c1ad5ca,False
+Supermercado semana,Supermercado,Supermercado,0.6447,83.59809999819845,31.54700000595767,bff4e0e8-338f-4d49-96d4-190e477fcd00,False
+HBO Max mensal,Streaming,Streaming,0.4402,81.8845999892801,33.72229999513365,1faf0ea6-4e6c-427c-af55-b5e7bd864419,False
+Abastecer gasolina Ipiranga,Combustível,Combustível,0.6737,78.43100000172853,30.390300002181903,f8bf3762-02f2-4e08-a750-711b8d073aa4,False
+Netflix mensalidade,Streaming,Streaming,0.6471,77.10450000013225,28.20149999752175,6f3e6dac-1513-4f9a-8436-2068e2eb5036,False
+Reembolso despesa empresa,Reembolso,Reembolso,0.7905,79.81480000307783,28.59820000594482,2c15ce87-7953-49df-a351-4103a3763a15,False
+Almoço restaurante,Restaurantes,Restaurantes,0.8894,78.17470000009052,25.645799993071705,f13dd9a5-f922-43c8-a9c4-9b2e73d104ab,False
+Bradesco Saúde mensal,Plano de Saúde,Saúde,0.8765,62.79819998599123,17.57799999904819,3e7eb36d-e7e4-41ce-af79-3c25ca99c210,False
+Tarifa energia elétrica,Energia,Energia,0.6981,59.118899996974505,22.796399993239902,e72a92c9-b70b-40db-88df-a28f4bbb27ef,False
+Farmácia remédio,Farmácia,Saúde,0.6377,64.21829998726025,31.742699997266755,afe44c0b-cd76-46c2-a230-746de3818819,False
+Steam jogo PC,Jogos,Streaming,0.4047,82.44110000669025,32.276700003421865,a4c3cfc3-9692-4fb1-bdf2-7117759df605,False
+Resgate fundo investimento,Investimentos,Investimentos,0.8076,88.71699999144766,25.65120000508614,f7511edb-1191-46a2-bc09-65a37b525080,False
+Workshop pago presencial,Cursos,Cursos,0.4377,70.57760001043789,31.80580001208,50e1d422-140b-4b95-ac12-3e7b46dff1db,False
+Pizza delivery sexta,Restaurantes,Restaurantes,0.4319,79.53829999314621,29.8633000056725,5794a9d5-c2ff-4d45-9905-c66c8cf80a2d,False
+Etanol BR posto,Combustível,Combustível,0.4759,75.74889999523293,25.72830001008697,d252bbab-37e7-4666-9e7c-5bf63a67ea9f,False
+Livro romance,Livros,Livros,0.8752,61.09820000710897,23.065200002747588,d2bac1b4-3a52-4bb1-955d-52bccab4a7c6,False
+Nintendo eShop jogo,Jogos,Jogos,0.6193,64.22169999859761,22.691899997880682,da7f6cab-058b-41bc-9cd0-9f58c5460088,False
+Projeto freela design,Freelance,Freelance,0.3656,69.07100000535138,29.84400000423193,ffec361e-7b5d-4020-a3c0-89def25e5934,False
+Alura assinatura anual,Cursos,Financeiro,0.4749,79.9772999889683,29.632699996000156,92a91727-e28a-452f-8d4e-1de377df4177,False
+Condomínio prédio,Condomínio,Condomínio,0.8116,86.34779999556486,26.303799997549504,2ee8c41b-d902-4a62-baed-cf6f4af0349d,False
+Drogaria São Paulo,Farmácia,Beleza,0.5256,64.45499999972526,29.860399998142384,5c357ede-90a0-4291-83ed-31c6e471c32c,False
+Drogasil compra,Farmácia,Compras,0.6256,66.35690000257455,29.72750000481028,1858d3a6-c5df-4069-a839-6579ed35005e,False
+Lanchonete shopping,Restaurantes,Compras,0.6043,78.44409999961499,32.090200009406544,941770ba-3bc0-4ba1-af0e-3d91abaaf85f,False
+Amazon Prime Video,Streaming,Streaming,0.4534,70.21099999838043,30.877099998178892,e22646a4-5e4a-4c6a-a4f4-51451aeec817,False
+Internet Oi fibra,Internet,Internet,0.6624,80.71120000386145,22.061100011342205,bb2bbd91-c0e4-4f43-b126-cae542373c43,False
+Carrefour compras mês,Supermercado,Compras,0.5883,58.809499998460524,22.284999999101274,ca294d57-bd1d-452a-ba24-797568d49467,False
+Amazon livro físico,Livros,Livros,0.5936,61.2016999948537,30.181299996911548,c17b28db-8429-4d48-b3ed-dc208924c7b5,False
+Cabify viagem,Aplicativos de Transporte,Viagens,0.7609,83.7385000049835,28.726700009428896,eab7dbbb-ac3f-4813-add5-5ed59ce6d5a5,False
+Dividendo ação,Investimentos,Salário,0.4073,65.6438000005437,35.82479999749921,ff5918f0-9607-4987-87df-607a1e5f82c5,False
+TIM Live banda larga,Internet,Streaming,0.5282,78.90110000153072,32.468000004882924,f841886d-77d0-4474-b473-efe14f1a5fa9,False
+Conta luz Light,Energia,Energia,0.4063,72.6666000118712,34.751600003801286,6e0d97cf-fc8b-4ad2-947c-98df6cb3b5bf,False
+VT cartão recarga,Transporte Público,Aplicativos de Transporte,0.2792,67.36580000142567,31.645700000808574,082438de-6180-4b55-b412-5894803f0d25,False
+Spotify premium,Streaming,Streaming,0.4131,83.62679999845568,23.953800002345815,c312ec07-db5b-4202-9fda-a326e16665de,False
+Mensalidade Amil,Plano de Saúde,Manutenção Casa,0.6564,62.9870000120718,21.065299995825626,dd6fd9c6-b1e0-4c74-a4b3-75fdf79c5a6b,False
+Condomínio mensal,Condomínio,Condomínio,0.9885,69.59679999272339,30.425099990679882,6f36dc74-38cd-4c96-8f71-f3492955cd70,False
+Teatro peça,Lazer,Aluguel,0.601,73.30649999494199,23.078599988366477,87868939-eaae-4ba6-b10c-b0317600fb16,False
+Academia plano trimestral,Academia,Academia,0.7573,64.20880000223406,23.351099996943958,953adf47-5798-454a-b548-36dd5ba851f1,False
+Boleto condomínio,Condomínio,Aluguel,0.7134,69.18219999352004,25.326200004201382,35d62082-b174-4425-9c76-e39b73a43c45,False
+Combustível posto Shell,Combustível,Combustível,0.8211,68.82069999119267,27.33539999462664,78aadaff-f8e2-4994-bcea-586fb715ec31,False
+Bar com amigos,Lazer,Restaurantes,0.494,70.07409998914227,39.05269999813754,ce976410-34b5-4986-b0f1-b09feeb7cb7d,False
+Hapvida mensalidade,Plano de Saúde,Roupas,0.7151,74.29730000148993,36.963100006687455,0049560d-4a71-404c-b89d-1aad009b8852,False
+Provedor local internet,Internet,Internet,0.6642,71.20239999494515,41.761300002690405,09ae38f0-d55b-4ecf-94a4-d9953ed0a378,False
+Metrô passagem,Transporte Público,Transporte Público,0.7075,74.8536999890348,36.329599999589846,c2bcfe8e-3459-472c-b43a-c328ee603f09,False
+Pagamento freelance projeto,Freelance,Freelance,0.719,78.93950000288896,26.94689999043476,1187803c-c93b-4981-8725-36e56cf49e44,False
+Smart Fit mensalidade,Academia,Saúde,0.3604,71.98570000764448,23.525700002210215,9a22adf2-16f7-4d2c-b3c5-3110c8d64df6,False
+Reembolso plano saúde,Reembolso,Reembolso,0.6103,72.3563999927137,21.72090001113247,7da95992-eec1-49bc-9bca-1edd218563d9,False
+SulAmérica plano saúde,Plano de Saúde,Plano de Saúde,0.7852,60.98070000007283,30.303700012154877,9a0b90a9-4225-432f-a713-a96a73b05aac,False
+Dermatologista consulta,Saúde,Saúde,0.4143,68.33010000991635,28.85440000682138,1ca26d6c-f70e-49b2-8395-f0f303da4cd6,False
+Comissão venda mensal,Salário,Outras Receitas,0.3981,68.68920000852086,32.102500001201406,61429bb8-062e-449d-a663-5b43c1a52f7d,False
+Sams Club compras,Supermercado,Compras,0.492,77.08830000774469,29.692500000237487,e4e350ac-a874-4339-afae-85a87b166b78,False
+Pagamento aluguel imobiliária,Aluguel,Manutenção Casa,0.3605,80.52499999757856,23.560799992992543,4618ffd6-ac26-48a6-98d7-c964e73f9bbb,False
+YouTube Premium mensal,Streaming,Streaming,0.623,72.02420000976417,24.520399994798936,3e44052b-1790-4a94-98e5-f99b4b27e4f4,False
+Livraria Saraiva livro,Livros,Beleza,0.6433,70.4008999891812,27.155999996466562,1cfc852c-23b8-49d9-9707-eab1a643b281,False
+Apple TV+ assinatura,Streaming,Internet,0.3404,78.46170000266284,31.89080000447575,ddeac435-20d3-453a-9493-2e8a1a5aaa00,False
+Coursera assinatura,Cursos,Cursos,0.6298,66.7340000072727,20.370500002172776,11035918-0879-46cf-8373-d4ee4f413e62,False
+Net Claro internet,Internet,Internet,0.7109,75.4019000014523,24.14739999221638,3962f491-5e0f-4a68-a17c-06856473b679,False
+Décimo terceiro,Salário,Presente,0.5375,65.1260999875376,50.16070000419859,00d35bcf-b067-4474-9dab-d32c856c57d7,False
+iFood almoço,Restaurantes,Alimentação,0.782,80.27419999416452,26.078999988385476,26711f76-65b7-4238-b3db-0ff4ee4b490a,False
+Karaokê noite,Lazer,Aluguel,0.5237,73.76479999220464,25.93930000148248,8b5ce3cf-f1bd-4f82-9bde-cf6abffdfaae,False
+Juros CDB,Investimentos,Presente,0.3835,70.16010000370443,25.11600000434555,8ac1c3be-e112-4fc6-b751-d4a2b5b31941,False
+Energia Enel,Energia,Energia,0.9353,76.78119999764021,17.768099991371855,d5d4de2c-7955-41e9-9525-8844143d57bc,False
+Reembolso emergência médica,Reembolso,Reembolso,0.6571,72.80979999632109,25.823400006629527,2d71136f-2b12-4d60-b5e9-dc9d987fbeed,False
+Salário mensal empresa,Salário,Salário,0.7601,64.54179999127518,23.283699993044138,6369f5e7-77f0-42ee-95b8-9081efe5b8a4,False
+Fisioterapia sessão,Saúde,Saúde,0.4646,62.19669998972677,48.48209999909159,010eb900-450d-4098-8382-fd5d38a61987,False
+Parque ingresso,Lazer,Transporte Público,0.5854,79.40760000201408,23.675599994021468,5649e94f-b56b-4b7c-8e08-f5ed927fb491,False
+Recebimento freelance código,Freelance,Freelance,0.693,74.2478000029223,19.55499999166932,82edd1ef-21cc-4f85-abe9-4e9998dda6ec,False
+Pagamento salário,Salário,Reembolso,0.5184,80.55910000985023,30.020000005606562,695246eb-046c-415b-b451-6c4d7f48dc19,False
+Atacadão mensal compras,Supermercado,Compras,0.6986,70.00520000292454,27.468800006317906,07584da7-1c8e-4157-9bf0-a681ac5ea555,False
+Curso de inglês Cultura Inglesa,Cursos,Educação,0.5368,77.89649999176618,23.667499990551732,e598bf5e-e775-496c-9e6e-b33984c0afbe,False
+Combustível viagem,Combustível,Combustível,0.7902,64.43949999811593,25.795599998673424,4c9b6d6c-deef-490d-93cd-0fa7960e7657,False
+Curso de programação,Cursos,Cursos,0.7409,62.5681999954395,30.896899988874793,4f3b4994-43ff-4552-b126-b68a3858dc80,False
+Restaurante a la carte,Restaurantes,Restaurantes,0.9002,63.97599999036174,29.694700002437457,fead4cea-97c7-4b28-95c6-fc4fd18b4bb4,False
+Óculos ótica,Saúde,Lazer,0.3444,69.11449998733588,32.5544999941485,808f4331-da96-4441-873d-fe75b4990653,False
+Extra hipermercado,Supermercado,Supermercado,0.6052,78.32570000027772,28.9047000114806,0e79eec5-810b-44ec-aa5a-f46c2d20dce1,False
+FII rendimento mensal,Investimentos,Investimentos,0.6196,83.09509999526199,28.752099999110214,f19a9b08-a075-4417-be90-e202fe349001,False
+Apostila concurso,Educação,Jogos,0.6045,76.24829999986105,22.43540000927169,09628d7c-0204-412f-923a-61595a927b13,False
+Conta água mensal,Água,Água,0.9203,70.30589999340009,20.043900003656745,8997a1cd-c5ea-46de-a408-5646f0b85686,False
+Gasolina aditivada,Combustível,Combustível,0.829,58.96410001150798,24.041099997702986,e58c2184-5593-44e9-8614-bffae38184a5,False
+Xbox Game Pass mensal,Jogos,Jogos,0.4886,74.58800000313204,33.87289999227505,ba793faf-f9e4-4f7f-a486-0a23d44d79a7,False
+Exames laboratório,Saúde,Academia,0.5103,73.45110000460409,30.46030001132749,66e2a914-5af7-465a-8940-17efc2aec5a6,False
+Horas extras,Salário,Freelance,0.4129,83.47729999513831,29.807899991283193,5b95579b-17bd-40b9-b31f-ed259cc25493,False
+Lucro venda ação,Investimentos,Investimentos,0.4932,79.42249999905471,31.626800002413802,d41c3e22-f6d6-4b5a-b174-9fadab10b38c,False
+Anuidade academia,Academia,Academia,0.9343,64.03680000221357,28.062299999874085,b771cc3a-fad4-413f-b65f-1110de3f71af,False
+Anuidade colégio,Educação,Educação,0.7391,76.01579999027308,28.95120000175666,96ef5682-e0fc-46b8-b77e-4ac50c80fdd2,False
+Disney Plus assinatura,Streaming,Compras,0.3066,77.12349999928847,26.993299994501285,aeb7fd9d-c4a0-4625-9fdb-8cc76deeec5d,False
+Bio Ritmo academia,Academia,Academia,0.5607,77.7135999960592,26.343700010329485,11270be7-cd6e-40cd-b1a3-51a717b9dc1d,False
+Material escolar filhos,Educação,Educação,0.6695,68.65190000098664,15.369000000646338,98e28e0f-429e-4a7b-8209-ccf775c319fd,False
+Cartão BOM recarga,Transporte Público,Eletrônicos,0.5435,57.52310001116712,27.157300006365404,ee59ad76-fe27-4922-adcc-778722bd2fdd,False
+Psicólogo consulta,Saúde,Cuidados Pessoais,0.5687,94.30359999532811,28.75070000300184,1efb9873-618e-4059-83a2-65c77df6e752,False
+Aula particular violão,Cursos,Cursos,0.5146,67.37289999728091,24.373500011279248,9216a8ea-2df4-4364-972b-daa1127f9543,False
+Rendimento Tesouro Direto,Investimentos,Investimentos,0.5593,55.00670000037644,24.03539999795612,6d5a2bc5-9c2e-4379-8bd1-55855e34c42b,False
+Festa balada,Lazer,Roupas,0.581,69.26859999657609,27.137700002640486,e5aa3420-ec2a-49c7-baee-b91053468e11,False
+Passagem ônibus urbano,Transporte Público,Transporte Público,0.6309,76.25320000806823,27.14140000171028,f5eff7ea-6266-4a85-9f25-dd7bec3137d0,False
+Plano de saúde Unimed,Plano de Saúde,Plano de Saúde,0.8384,64.66579998959787,20.009600004414096,fe667b9f-7d0f-4cbf-9080-7297d7b2096d,False
+Tarifa água Sanepar,Água,Água,0.6637,69.7881999949459,20.79970001068432,7cf739db-33f8-4055-ba3e-ae67af24d289,False
+Consulta médica particular,Saúde,Cuidados Pessoais,0.616,60.961900002439506,22.42649999971036,7be018be-e63a-49d4-bfaa-218d560a3f16,False
+Dentista limpeza,Saúde,Cuidados Pessoais,0.3818,66.97500000882428,26.32090001134202,5ad6f1fa-90e6-4da4-a2a8-c0b33f914399,False
+Epic Games compra,Jogos,Jogos,0.6487,63.25590000778902,27.54840000125114,b4295499-5730-447b-9983-de0fbb48d0b1,False
+Hortifrúti feira semana,Supermercado,Aluguel,0.3755,76.06560000567697,27.61119999922812,1693f0c9-6ad9-4f0c-acf4-11742e4b36d5,False
+Reembolso viagem trabalho,Reembolso,Reembolso,0.6214,77.2992999991402,29.132199997548014,ae647ff5-74c8-43d2-9416-6c0c45d3467b,False
+Uber centro,Aplicativos de Transporte,Aplicativos de Transporte,0.4662,76.81090000551194,27.688199988915585,a97c2c43-85b2-43d3-8665-af77d442a281,False
+Mensalidade escola particular,Educação,Educação,0.6988,73.27110000187531,24.913599991123192,2e02c17d-1633-4235-817f-a3bca923ce4c,False
+Uber Black evento,Aplicativos de Transporte,Viagens,0.2934,70.12140000006184,19.15779999399092,c2a2b582-01fe-42e0-9049-d88f5154f2c1,False
+Pague Menos remédios,Farmácia,Saúde,0.5415,62.602200006949715,32.41369999886956,6eddb24e-1808-42bf-962c-8c338bfb2d60,False
+Aluguel kitnet,Aluguel,Aluguel,0.852,73.63970000005793,30.096199989202432,ae2d8649-42c1-4da6-b722-df9bbb380067,False
+Boliche partida,Lazer,Jogos,0.884,72.19639999675564,31.818399991607293,97de7cdb-a37e-41e7-b572-47912f7cf242,False
+Restaurante self-service,Restaurantes,Restaurantes,0.7288,80.18990000709891,19.857999999658205,6a154681-a7d5-4889-aa35-40cab84c3f42,False
+PlayStation Store jogo,Jogos,Jogos,0.5369,69.51030000345781,24.919499992392957,5f80d678-0b47-4784-84f2-377ec7e2a91e,False
+Compras Pão de Açúcar,Supermercado,Alimentação,0.5281,63.21130000287667,25.018000000272878,67ffd971-7984-4162-87f9-c7d5c86bb195,False
+NotreDame Intermédica,Plano de Saúde,Academia,0.5357,75.39410000026692,34.271099997567944,7028eda4-c458-407b-b7f4-8f8e3a4f4f7c,False
+Conta elétrica mês,Energia,Eletrônicos,0.4785,70.75230000191368,25.587199997971766,2684d463-9eb0-4230-b290-e9e1856e5f70,False
+Bônus trimestral,Salário,Outras Receitas,0.4891,60.86759999743663,25.556099993991666,26f893ff-18a3-47d3-ab18-81ddc5a517ad,False
+Conta de água Sabesp,Água,Água,0.7659,69.69819999358151,26.068000006489456,ea2b5ae9-8252-4c1a-b67c-c884c4e25a90,False
+Uber pool aeroporto,Aplicativos de Transporte,Aplicativos de Transporte,0.4277,78.55109999945853,29.6084999863524,998d68d9-34b6-478b-8c46-ce6708243789,False
+Saneamento básico,Água,Saúde,0.7437,76.77859999239445,22.230999995372258,9b62ccbb-a5df-464c-9f72-8d5ea9151952,False
+99 corrida noite,Aplicativos de Transporte,Contas,0.4364,71.57559999905061,48.093699995661154,0d271413-cfca-408f-84f9-5310a87b59a8,False
+99 corrida tarde,Aplicativos de Transporte,Contas,0.3778,30.52620000380557,35.71919999376405,60d83b3e-81a3-4bcc-8a8d-a82132bcb360,False
+Acupuntura sessão,Saúde,Aluguel,0.7067,80.20250000117812,29.153299998142757,adbee108-d966-445e-a824-c9ff4519b6dc,False
+Rendimento poupança,Investimentos,Reembolso,0.572,62.632699991809204,31.882900002528913,b24fcb4f-7c02-4b29-afb9-cae81a87a354,False
+Açougue boi,Supermercado,Roupas,0.8147,70.74419999844395,31.92269999999553,522ae407-2ec5-46c8-b2ef-d6c5a72a7853,False
+PLR participação,Salário,Presente,0.5742,83.91750000009779,29.697400008444674,db092cf7-a724-4903-beb4-c900ee98e4c5,False
+Cinema ingresso,Lazer,Compras,0.4773,92.4170999933267,33.82989999954589,9c8ae257-fc68-46ff-a117-08d8b7d82242,False
+Aluguel recebido imóvel,Investimentos,Freelance,0.3385,75.73330000741407,30.736300002899952,73fd8e48-cf45-4468-b8ab-905b9b729809,False
+Conta de luz CPFL,Energia,Eletrônicos,0.3361,63.7025000032736,29.229299994767644,b65cb27c-e8ab-4409-98d3-f882f4f5b91a,False
+Jantar restaurante japonês,Restaurantes,Restaurantes,0.6953,79.22929999767803,24.797899997793138,cf937eb7-365f-4492-9d90-0306f00b9a74,False
+Antibiótico farmácia,Farmácia,Plano de Saúde,0.3525,77.63149999664165,24.639099996420555,a3dde679-4cd0-4456-aec5-0cb34cda8962,False
+Udemy curso online,Cursos,Internet,0.4556,70.06249998812564,24.535800010198727,1681982f-92fb-42a7-92ac-24b693c4bb22,False
+Aluguel mensal apartamento,Aluguel,Aluguel,0.5344,56.84119999932591,29.775400005746633,572d1d60-76f3-4681-b19a-a2af05f34367,False
+Jogo mobile in-app,Jogos,Telefone,0.3832,82.03160000266507,21.916700003203005,08fe1a70-2c4d-47a6-abd7-89ec90cfc26d,False
+Internet Vivo Fibra,Internet,Internet,0.6112,69.99190000351518,23.37660000193864,8d7dfe7c-fef4-4103-a593-fe397594d741,False
+Estorno cartão crédito,Reembolso,Outras Receitas,0.5389,71.06889999704435,33.81150000495836,c59a6602-784a-4de1-adfa-598ed21c5a1c,False
+Compra ebook Kindle,Livros,Livros,0.5466,75.98530000541359,33.852599997771904,a2fbb35a-f180-4343-93cc-b49ba4b7e226,False
+Aluguel casa,Aluguel,Manutenção Casa,0.6506,79.90419999987353,31.71650000149384,2bd0b353-3a85-488e-a45c-f7c19d6fcec4,False
+Plano internet 500mb,Internet,Internet,0.6378,79.2385000095237,30.04990000044927,4f536d1a-a154-41c3-a219-533ac005b1f4,False
+Recarga bilhete único,Transporte Público,Transporte Público,0.5824,76.063400003477,32.100299999001436,3fca0493-2652-4d4f-a0b7-de4b5d0da656,False
+Sushi rodízio,Restaurantes,Alimentação,0.4109,61.02189999364782,24.599500000476837,5652bf2a-dbbd-453a-b157-88f228d5736c,False
+Bar da esquina jantar,Restaurantes,Restaurantes,0.7031,60.241500003030524,31.23609999602195,a19903f3-2674-417a-89e7-9b3144fed5e0,False
+Mensalidade academia,Academia,Academia,0.8754,63.595599989639595,26.804000008269213,ecd27231-92c1-40ad-b7e4-6d22782ffd63,False
+Posto BR gasolina,Combustível,Combustível,0.8902,74.2140000074869,20.988199990824796,e1d0bbfe-af39-4fa1-b794-05ac53f5ff0d,False
+Job freelancer site,Freelance,Freelance,0.6872,70.37420000415295,28.07439999014605,cccda8f3-4358-4dd9-bbad-1b12d1eb7699,False
+Bilhete trem CPTM,Transporte Público,Transporte Público,0.558,83.23720000043977,29.23809998901561,4221d795-1fd4-438b-bc41-bfcad9461dc3,False
+Assaí atacadista,Supermercado,Roupas,0.5706,78.8505999953486,24.1803999961121,b09f610f-04c1-4359-9795-b04b373c2f11,False
+Locação imóvel,Aluguel,Aluguel,0.6652,74.0502000116976,24.045999991358258,0fcc3748-77f6-43e2-b496-9241ec68d7b9,False
+Taxa condominial,Condomínio,Impostos,0.6503,63.55750000511762,30.951900000218302,a09687fa-0419-4962-8fae-af241534c432,False
+Farmácia Popular remédio,Farmácia,Saúde,0.6346,76.91029999114107,29.02989998983685,80c37bef-c1f2-4870-b1db-24ea8a94517a,False
+Hamburgueria centro,Restaurantes,Restaurantes,0.4604,74.30410000961274,22.50330000242684,6f1122d0-d462-4678-b0ad-5c4486a2ee33,False
+Ônibus intermunicipal,Transporte Público,Transporte Público,0.5626,67.7237000054447,20.992000005207956,44d7b569-e8f1-41d9-80a6-3b259796ada9,False
+Mensalidade faculdade 2026,Educação,Academia,0.6234,62.36019999778364,19.584300011047162,357fc2c5-1639-47b6-bdd9-b674f9a5a2dc,False
+Cosan água mensal,Água,Água,0.8822,68.37839999934658,27.870799996890128,732f19b7-043d-4cf0-a2f6-28831312f915,False
+Sacolão da feira 2026,Supermercado,Aluguel,0.4475,83.96089999587275,20.863600002485327,6979643f-020e-4ba7-b9f1-ab55a84d053f,False
+Diesel posto rodovia,Combustível,Combustível,0.696,68.58140000258572,22.440100001404062,1b7ed6fb-5871-473d-a4cb-94fe33d6148f,False
+Trabalho extra freelance avulso,Freelance,Freelance,0.7709,64.64420001429971,24.261400001705624,499575ee-11a1-4df4-a166-ddeb68ea303e,False
+Cota condominial R$,Condomínio,Condomínio,0.4234,65.81200000073295,29.707399997278117,942b701e-1695-4318-9e1d-d072eb9310f7,False
+Show banda avulso,Lazer,Roupas,0.4599,66.98799999139737,23.7009999982547,5e7ad4de-0262-4240-9cbe-e1afac94578d,False
+Livro técnico programação 2026,Livros,Cursos,0.3862,72.54660000035074,24.732200006837957,e8792dd3-f2a1-48d0-a940-3de9c32c96e0,False
+Adiantamento salarial 2026,Salário,Outras Receitas,0.4063,68.7638999952469,30.040700003155507,a0807dd8-77f4-44b4-9e12-8b2828aa288b,False
+Vitaminas farmácia mensal,Farmácia,Saúde,0.3785,81.46210000268184,34.62330000184011,c8c7cdbc-35c2-4a59-9439-13ab023d2ecc,False
+Cupom LCI mensal,Investimentos,Outras Receitas,0.3681,79.10880001145415,30.318600009195507,e695bc4e-2a07-462a-80f8-61475d807850,False
+Supermercado semana R$,Supermercado,Supermercado,0.5456,81.41500000783708,31.979300008970313,b552a9dc-5996-4701-9149-fe3cb3ac5059,False
+HBO Max mensal mensal,Streaming,Streaming,0.4142,68.46979999681935,21.451799999340437,2e24e9e7-34df-41de-bf5a-0adcebf34c6c,False
+Abastecer gasolina Ipiranga 2026,Combustível,Combustível,0.6342,71.02560000203084,20.44229999592062,b8134b62-69a5-472e-9d39-050451c51371,False
+Netflix mensalidade 2026,Streaming,Streaming,0.5177,69.37240000115708,20.406900002853945,892d89f1-f671-43db-97de-e6d4c1bcd0a8,False
+Reembolso despesa empresa,Reembolso,Reembolso,0.7905,63.367499999003485,24.085199998808093,cb56f500-7ede-499b-a241-94acae9b7b69,False
+Almoço restaurante 2026,Restaurantes,Restaurantes,0.7416,75.298899988411,23.972700000740588,b1cae18f-a153-47f8-b638-8128f89774c0,False
+Bradesco Saúde mensal R$,Plano de Saúde,Plano de Saúde,0.4765,57.15399999462534,20.045700002810918,3edf515d-c67b-4c0f-a6c3-c65eb6bf26a8,False
+Tarifa energia elétrica loja,Energia,Energia,0.5217,69.07619998673908,21.922399988397956,a17dd9b0-bb96-4e26-a5c0-8f669651c315,False
+Farmácia remédio,Farmácia,Saúde,0.6377,79.33049999701325,22.156799997901544,c6b2a657-d76f-4fec-ba62-1922fe962775,False
+Steam jogo PC,Jogos,Streaming,0.4047,62.58050000178628,19.99249999062158,ea76ac23-fdd6-480f-a002-2341d46ad5b1,False
+Resgate fundo investimento R$,Investimentos,Investimentos,0.6751,65.75749999319669,27.360799998859875,8880991c-43a9-4e78-aa5c-5f67bd8a79ab,False
+Workshop pago presencial R$,Cursos,Compras,0.3777,73.0150000017602,30.885400003171526,55130cc0-7681-4bff-9f28-411bdba692bf,False
+Pizza delivery sexta mensal,Restaurantes,Restaurantes,0.4062,78.12379999086261,22.74639999086503,66513511-b864-4861-80aa-e33e0bf30f78,False
+Etanol BR posto,Combustível,Combustível,0.4759,69.60699999763165,24.689900004887022,4b93bbe1-1660-4a2e-afac-142ea2177e59,False
+Livro romance mensal,Livros,Livros,0.8393,61.857699998654425,24.27880000323057,3babecd6-dbf7-491b-bbcc-53141194659f,False
+Nintendo eShop jogo 2026,Jogos,Jogos,0.5,65.64099999377504,27.644499990856275,72646146-7da1-40aa-8cd8-817c6cfbbe29,False
+Projeto freela design,Freelance,Freelance,0.3656,67.83499999437481,30.172799990396015,dd120c29-e0f8-4683-838c-6949b2b8748d,False
+Alura assinatura anual,Cursos,Financeiro,0.4749,65.77629999083001,32.307099987519905,56da39fa-19e4-43c9-bd35-6879b2850488,False
+Condomínio prédio avulso,Condomínio,Condomínio,0.7943,66.01829999999609,25.961799998185597,ee42d32e-fa6c-49b3-84ce-f60180de1eb4,False
+Drogaria São Paulo loja,Farmácia,Restaurantes,0.4587,74.70130000729114,23.175399997853674,29be04f8-a0d4-4399-9a79-359c604a8819,False
+Drogasil compra,Farmácia,Compras,0.6256,70.10830000217538,32.77910000178963,0664beb9-f704-44b7-8b0f-4e7f9fca2569,False
+Lanchonete shopping 2026,Restaurantes,Compras,0.4851,77.06709999183659,28.798200000892393,fbfa0e9c-5586-4542-a158-2b49bc143941,False
+Amazon Prime Video mensal,Streaming,Streaming,0.445,80.43820000602864,32.72589998960029,574144ec-f80a-4401-ac06-07d7db0d26bf,False
+Internet Oi fibra mensal,Internet,Internet,0.6303,83.2661000022199,21.98020000651013,e5589b9f-06ad-4c03-8d3b-f7fd6dd417bb,False
+Carrefour compras mês avulso,Supermercado,Compras,0.6048,62.642399992910214,24.530199996661395,b52be963-584a-45d3-9401-c3e8faf0ada5,False
+Amazon livro físico loja,Livros,Livros,0.5871,59.90459999884479,30.9041000000434,2abe4046-1e80-42e7-a0ef-75998b756f24,False
+Cabify viagem 2026,Aplicativos de Transporte,Viagens,0.5909,72.0930999959819,29.917699997895397,a4a0fb35-e3bc-43e7-bdf5-b94bec50e6c5,False
+Dividendo ação mensal,Investimentos,Salário,0.3632,74.45509999524802,19.25870000559371,72e38447-6b38-457a-9dfc-d78beb0837e3,False
+TIM Live banda larga R$,Internet,Streaming,0.499,71.3465000008,21.68130000063684,befb3316-786b-446f-bbf9-8fb927bb2cf5,False
+Conta luz Light 2026,Energia,Energia,0.3073,71.79089999408461,24.406000011367723,d82a550b-e8ee-4281-9006-a9ffb534f28a,False
+VT cartão recarga 2026,Transporte Público,Transporte Público,0.2226,60.645200006547384,25.483999997959472,4efe5723-64c0-4982-8c9f-ea6c348eb96a,False
+Spotify premium loja,Streaming,Compras,0.3396,73.55980000284035,33.24910000083037,1e75f86c-a068-4a28-925d-d058b9ac72a8,False
+Mensalidade Amil mensal,Plano de Saúde,Manutenção Casa,0.6664,37.26309999183286,24.812799994833767,5087e27e-b01b-4533-9aee-d8dec37934af,False
+Condomínio mensal 2026,Condomínio,Condomínio,0.8062,61.87780000618659,22.123000002466142,da3121c5-2934-4dec-ab75-e8e8dba514b4,False
+Teatro peça avulso,Lazer,Beleza,0.5063,66.31059999926947,29.012500002863817,57320da8-b608-41d7-a1d2-51ae04d23606,False
+Academia plano trimestral avulso,Academia,Academia,0.7297,74.28600000275765,28.635599999688566,7ed8939c-66cc-401e-9847-1f0f55502e3c,False
+Boleto condomínio mensal,Condomínio,Aluguel,0.6774,65.74609999370296,30.610100002377294,c7c4a91d-34bf-4ada-af62-4b866caa5aec,False
+Combustível posto Shell avulso,Combustível,Combustível,0.8212,70.17710000218358,19.884900000761263,3ce0b38c-febd-431c-843a-f9194d2e97b7,False
+Bar com amigos R$,Lazer,Restaurantes,0.4409,67.410599993309,24.853800001437776,4a0f11b7-9284-4b4f-a626-7005d0a39c54,False
+Hapvida mensalidade loja,Plano de Saúde,Compras,0.7431,74.72940000297967,31.1504999990575,e0571776-6949-4956-bc6f-57e70affe27e,False
+Provedor local internet avulso,Internet,Internet,0.5549,75.13290000497364,30.407999991439283,59f6e79a-c636-49b9-a94b-17355771f25f,False
+Metrô passagem avulso,Transporte Público,Transporte Público,0.6631,69.49549999262672,23.975000003702007,49707875-4f21-415a-ac64-827eada1200b,False
+Pagamento freelance projeto R$,Freelance,Freelance,0.6307,60.20409999473486,26.828200003365055,954ca105-c754-43ca-81d8-ebfe1071d005,False
+Smart Fit mensalidade loja,Academia,Compras,0.422,72.06220000807662,29.758400007267483,94616335-9fbb-4bbe-9a8e-4fbfaca6b7ed,False
+Reembolso plano saúde 2026,Reembolso,Reembolso,0.4831,91.20830000028946,24.96670000255108,66cf6048-6fca-4f0e-aded-f75dd131839b,False
+SulAmérica plano saúde loja,Plano de Saúde,Plano de Saúde,0.6505,62.152600003173575,28.80070000537671,4b835280-6ffd-40eb-975a-e2e9586dc0ec,False
+Dermatologista consulta,Saúde,Saúde,0.4143,77.0423999929335,29.494999995222315,c64f1504-0de8-4a80-9660-898c957a0a09,False
+Comissão venda mensal mensal,Salário,Outras Receitas,0.3893,75.69159999547992,28.77400000579655,dfd17bcc-38db-4473-ba7c-173979eb2b45,False
+Sams Club compras mensal,Supermercado,Compras,0.4668,80.74229999328963,32.238200001302175,e3f05fd3-6ed2-47cc-8ae3-1a88942c919b,False
+Pagamento aluguel imobiliária,Aluguel,Manutenção Casa,0.3605,75.9838999947533,22.651199993561022,bf48e5e3-723f-4f6c-a5f6-de515d0031d6,False
+YouTube Premium mensal R$,Streaming,Streaming,0.5259,70.76380000216886,24.152400001185015,091ad5e4-9ea9-4257-ab21-374f870d3b64,False
+Livraria Saraiva livro,Livros,Beleza,0.6433,60.27390000235755,27.86609999020584,13add163-8fdf-4e08-85d7-379335b91aa1,False
+Apple TV+ assinatura 2026,Streaming,Internet,0.3391,74.100300000282,28.986100005568005,5f38a655-b8bb-4ab1-ba04-7dfd875696b5,False
+Coursera assinatura 2026,Cursos,Cursos,0.4939,76.29339999402873,22.066899997298606,03d0e560-8217-4033-99a3-065106457206,False
+Net Claro internet mensal,Internet,Internet,0.642,71.26979999884497,22.664499992970377,ae52eee2-3b2c-419f-9d4b-0b524f2596e4,False
+Décimo terceiro 2026,Salário,Presente,0.493,70.43849999899976,28.843400010373443,aab9519e-1b38-45cf-b8b5-3f75d0bbd3cc,False
+iFood almoço mensal,Restaurantes,Alimentação,0.7411,75.6526000041049,27.795200003311038,4b2d9c7b-a1ca-48bf-917c-6f999ae6b840,False
+Karaokê noite,Lazer,Aluguel,0.5237,68.88819999585394,25.529399994411506,279d8806-8a16-4acd-81ac-a66f61299dc6,False
+Juros CDB,Investimentos,Presente,0.3835,76.77179999882355,29.47160000621807,c58ac96c-6345-486d-b235-47c7166f310c,False
+Energia Enel avulso,Energia,Energia,0.9215,74.83669999055564,27.16510000755079,2b8deef2-226a-42b7-aa14-5bc5b97878da,False
+Reembolso emergência médica avulso,Reembolso,Reembolso,0.6538,80.3847999923164,42.03599999891594,a66b061b-af4c-4be8-8c14-866d456af53b,False
+Salário mensal empresa,Salário,Salário,0.7601,37.17450000112876,23.249599995324388,ebaea005-99cd-4f8a-9c1f-664b404b7eeb,False
+Fisioterapia sessão mensal,Saúde,Saúde,0.4509,78.03299999795854,22.046800004318357,62e5f05b-aba2-4af5-bb18-fea8d8366f99,False
+Parque ingresso,Lazer,Transporte Público,0.5854,72.40689999889582,21.36860000609886,daba24a5-5bc8-4d34-b6e4-263e8b28c9e1,False
+Recebimento freelance código,Freelance,Freelance,0.693,72.86670000758022,18.386299998383038,668d7e1a-67a7-4c50-8443-691962d255ab,False
+Pagamento salário R$,Salário,Reembolso,0.5061,61.8114999961108,24.095700006000698,3ff2c5d1-2059-4144-ad7a-dfa4d7fee096,False
+Atacadão mensal compras,Supermercado,Compras,0.6986,70.05759999447037,24.181699991459027,7c9fb7c4-9231-47a9-bcc1-efd1f698c257,False
+Curso de inglês Cultura Inglesa 2026,Cursos,Educação,0.4244,69.04060000670142,21.571599994786084,c5f4bafd-4edb-4dfd-ae5e-c4cfab2e0685,False
+Combustível viagem mensal,Combustível,Combustível,0.7545,74.55879999906756,41.8647000042256,86a0fdaf-1ae7-4f19-87a8-ea3be4d30da2,False
+Curso de programação R$,Cursos,Cursos,0.48,63.67740000132471,36.4248999976553,d3dd889f-941f-4ff8-b979-9c9fc315a414,False
+Restaurante a la carte avulso,Restaurantes,Restaurantes,0.8904,66.5830000070855,23.061500003677793,86d0a1cd-61e8-4d72-81cb-32a930f68c07,False
+Óculos ótica loja,Saúde,Compras,0.3973,70.20679999550339,16.920800000661984,2b063a90-4ab3-439c-9868-e867c6179032,False
+Extra hipermercado mensal,Supermercado,Supermercado,0.5385,67.06909999775235,26.695000007748604,12ab844c-a9b1-457a-bc5d-3d0900816828,False
+FII rendimento mensal 2026,Investimentos,Outras Receitas,0.475,64.63100000109989,25.555700005497783,ce3e8bae-89fe-4843-9b83-3a4ba7c3f465,False
+Apostila concurso mensal,Educação,Jogos,0.5712,68.02930000412744,25.70670000568498,9f3240af-869b-443b-a316-be64eb3aab13,False
+Conta água mensal avulso,Água,Água,0.8879,77.38719999906607,15.717199989012443,0ca76ae5-6340-42cf-8f97-b75110a745d9,False
+Gasolina aditivada 2026,Combustível,Combustível,0.6715,71.43539999378845,23.067900008754805,adef41ed-c337-4b73-a4df-d30d52728452,False
+Xbox Game Pass mensal 2026,Jogos,Jogos,0.42,73.58510000631213,28.225700007169507,6ed90f66-f256-4342-ac1c-9ae77df73a93,False
+Exames laboratório loja,Saúde,Compras,0.5077,73.67310000699945,28.31400001014117,5713036a-4540-4292-bdd2-db572f0a4c1b,False
+Horas extras mensal,Salário,Presente,0.3381,63.094099998124875,23.813499996322207,d3e05d7b-55d6-4a92-8109-b3a0f4c1258f,False
+Lucro venda ação loja,Investimentos,Salário,0.3572,67.51309998799115,27.211599997826852,8b6b6940-af1f-499a-bc59-c3cab5e8b39d,False
+Anuidade academia loja,Academia,Academia,0.6677,67.99329999194015,23.1229000055464,5f2802c7-f63e-4cce-8ea6-ae4eacafad83,False
+Anuidade colégio mensal,Educação,Educação,0.7255,71.0419999959413,23.7211999919964,14834b39-a6ca-413c-b557-6b1e78c535bb,False
+Disney Plus assinatura,Streaming,Compras,0.3066,72.23659999726806,31.54260000155773,6fed708d-2ddf-4c8c-b141-1a87e8153c16,False
+Bio Ritmo academia,Academia,Academia,0.5607,61.62980000954121,29.44710000883788,12ccbf48-7eb8-4f9d-9ddf-e42f9ec46786,False
+Material escolar filhos avulso,Educação,Educação,0.633,79.32489999802783,23.395899988827296,1a3e7204-52f9-4fbe-9961-56f06195bf0e,False
+Cartão BOM recarga loja,Transporte Público,Compras,0.5149,70.04580000648275,23.148599997512065,9fe3f90b-2857-48b1-95f6-01e828e84513,False
+Psicólogo consulta R$,Saúde,Cuidados Pessoais,0.3705,70.77320000098553,19.983699996373616,19360747-7e79-44d1-9e0c-b6299ce482c0,False
+Aula particular violão loja,Cursos,Academia,0.4592,73.28070000221487,27.09829999366775,50a748a0-0adb-4e19-88ab-480dfef91fb6,False
+Rendimento Tesouro Direto loja,Investimentos,Investimentos,0.5285,68.19019999238662,25.766200007637963,dd15856c-763c-4265-995b-7bd9f11fb177,False
+Festa balada loja,Lazer,Roupas,0.5479,62.19329999294132,29.96460000576917,5489d5a7-49b3-452d-9a1e-1b6dabe39434,False
+Passagem ônibus urbano avulso,Transporte Público,Transporte Público,0.6144,76.25019999977667,23.826199991162866,c96483de-cb0e-4aee-a25a-e2159eb2c35c,False
+Plano de saúde Unimed,Plano de Saúde,Plano de Saúde,0.8384,70.44749999477062,22.820599988335744,5b3af54f-687d-4099-8c11-cfb47d2ae2d4,False
+Tarifa água Sanepar avulso,Água,Água,0.6526,62.218499995651655,30.612200003815815,afa1bb85-547e-44cb-9ecd-190d7f89935c,False
+Consulta médica particular avulso,Saúde,Cuidados Pessoais,0.614,77.21059999312274,23.942499989061616,77c7b7ce-0f81-4a5f-8510-4991b647948e,False
+Dentista limpeza avulso,Saúde,Outras Despesas,0.3924,80.04720001190435,21.893099998123944,40a2c294-d145-4058-bfe5-1c05e29a5ae9,False
+Epic Games compra,Jogos,Jogos,0.6487,72.31160000083037,22.674299994832836,7c69922e-b83e-48f6-9a38-84d243555285,False
+Hortifrúti feira semana,Supermercado,Aluguel,0.3755,59.02280000736937,27.991599999950267,4ba7ca67-207c-403a-8674-4c6e942b129b,False
+Reembolso viagem trabalho loja,Reembolso,Reembolso,0.6162,70.1649999973597,51.16699999780394,c2cf2b9f-5c7f-4c5a-b44c-e6f6e41a44d5,False
+Uber centro avulso,Aplicativos de Transporte,Aplicativos de Transporte,0.4694,73.63120000809431,29.65310000581667,42d12546-c634-4581-9fa6-b4c6b05288d9,False
+Mensalidade escola particular R$,Educação,Educação,0.5553,76.69429999077693,32.826499998918734,20db3421-5f1f-4d92-ad2c-f187a817cbac,False
+Uber Black evento,Aplicativos de Transporte,Viagens,0.2934,69.51400000252761,27.269300000625663,c33e01ed-f5a9-4dea-8905-12df3804d6fa,False
+Pague Menos remédios mensal,Farmácia,Saúde,0.5216,65.38730001193471,20.42890001030173,edc02496-7d45-45dc-a6e1-2ca01136e4fb,False
+Aluguel kitnet mensal,Aluguel,Aluguel,0.8376,71.08969999535475,13.85610000579618,22c06930-7561-4254-9301-3068dfd1f7cf,False
+Boliche partida mensal,Lazer,Jogos,0.8178,57.78010000358336,20.72109999426175,a9caecea-72ef-4f5b-8dde-e312a75b0fb6,False
+Restaurante self-service 2026,Restaurantes,Restaurantes,0.6562,63.202200006344356,12.509599997429177,68f56d3a-92b9-49e8-842c-6a67fc223009,False
+PlayStation Store jogo loja,Jogos,Jogos,0.5036,56.81600001116749,19.977700008894317,131b8c53-741b-460b-b827-16b70d5551df,False
+Compras Pão de Açúcar mensal,Supermercado,Alimentação,0.5506,60.95869999262504,18.05410000088159,3c2f0e04-341d-4e44-8d47-350ecaff9043,False
+NotreDame Intermédica loja,Plano de Saúde,Academia,0.5087,57.84739999216981,25.094299999182113,d605915d-268f-4ac0-a0bc-b5a44ad22e55,False
+Conta elétrica mês mensal,Energia,Eletrônicos,0.5138,74.90469999902416,16.448599999421276,e8af504c-1ff3-4e1d-8c45-d6c86a0eeeb0,False
+Bônus trimestral R$,Salário,Reembolso,0.4107,67.53289999323897,20.281300006899983,bb813e4c-f5fc-4230-8dcc-57c13bbefb7c,False
+Conta de água Sabesp loja,Água,Água,0.6247,59.9925999995321,28.21659999608528,bd817628-1ab7-496a-82c0-eeebddb9f8a7,False
+Uber pool aeroporto mensal,Aplicativos de Transporte,Aplicativos de Transporte,0.4062,60.02020000596531,13.938699994469061,8551ab3d-2dcf-49ce-9d80-182bc16a4f19,False
+Saneamento básico,Água,Saúde,0.7437,66.60179999016691,20.94539999961853,d326de4a-6f06-476a-af11-578a0f3eae45,False
+99 corrida noite loja,Aplicativos de Transporte,Compras,0.5016,58.32460000237916,28.316600000835024,c84986e9-2e12-42b8-a9f1-169b091d25c7,False
+99 corrida tarde 2026,Aplicativos de Transporte,Contas,0.3261,69.49430001259316,25.666700006695464,0bbb89f8-ff9d-4e71-9a43-91850b18c7b0,False
+Acupuntura sessão,Saúde,Aluguel,0.7067,73.70130000344943,19.187000012607314,e1412d9b-8220-46e7-ad78-e51511c4cf47,False
+Rendimento poupança,Investimentos,Reembolso,0.572,70.81799999286886,19.92249999602791,4b690ef9-d025-4964-8656-13e5a165ac5e,False
+Açougue boi avulso,Supermercado,Alimentação,0.6595,58.724100003018975,20.44890000252053,29198a56-d87e-43e2-88f4-84ce75b3f1b7,False
+PLR participação 2026,Salário,Presente,0.4084,68.08270000328775,23.111799993785098,7a9e92e1-bf76-4a06-be7a-7ef0bb8c5e4c,False
+Cinema ingresso,Lazer,Compras,0.4773,75.50340000307187,26.040199998533353,cf280422-8624-45a5-97f6-c6d3ab3c5d41,False
+Aluguel recebido imóvel,Investimentos,Freelance,0.3385,78.37209998979233,22.374199994374067,34a942fd-1e54-44c8-858b-75048fb28f8d,False
+Conta de luz CPFL mensal,Energia,Eletrônicos,0.3343,72.25579999794718,22.388700002920814,6ce2a478-7d4b-4aa6-bb0b-505aa69d3c75,False
+Jantar restaurante japonês mensal,Restaurantes,Restaurantes,0.66,67.63269999646582,18.868099999963306,6691d82b-c0ab-4123-8540-379b6c9bf744,False
+Antibiótico farmácia loja,Farmácia,Condomínio,0.3096,58.30999999307096,20.678300003055483,9e87dcb1-2447-40a0-8c0b-0872c4f3ce7a,False
+Udemy curso online loja,Cursos,Internet,0.5063,67.10230000317097,20.898000002489425,feb8cb21-b671-410c-a628-b9e2eb6456d5,False
+Aluguel mensal apartamento loja,Aluguel,Aluguel,0.4633,70.81089999701362,13.106500002322719,9614d181-68c7-4615-8d73-6df7314f566e,False
+Jogo mobile in-app mensal,Jogos,Telefone,0.4333,58.45109999063425,26.44829999189824,9bc731f6-924f-4a92-905c-d4a54cdb1894,False
+Internet Vivo Fibra loja,Internet,Internet,0.5912,74.56180000735912,23.061599989887327,0fdb84b9-e1b6-45a6-92c6-85a29ba6484c,False
+Estorno cartão crédito,Reembolso,Outras Receitas,0.5389,72.72719999309629,22.593900008359924,b328117a-94ee-42e2-b1d0-3729af4de2fe,False
+Compra ebook Kindle mensal,Livros,Livros,0.5237,70.13960000767838,19.390900008147582,69ea5607-8a63-4e3b-9d04-882909fcd880,False
+Aluguel casa loja,Aluguel,Compras,0.5223,72.59939999494236,18.89839999785181,22fa8fde-3f34-4956-b7b0-140aa2af2734,False

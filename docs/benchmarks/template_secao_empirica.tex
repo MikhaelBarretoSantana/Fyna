@@ -1,0 +1,173 @@
+% =====================================================================
+% Subsecao 5.5 — Avaliacao Empirica (Rodada 2)
+%
+% Como usar:
+%   1. Substitua todos os <PREENCHER: ...> pelos numeros reais dos CSVs.
+%   2. Copie matriz_confusao.png para images/ do projeto LaTeX.
+%   3. Inclua este arquivo no tcc_mikhael.tex apos a Subsecao 5.4 com:
+%        \input{secoes/secao_5_5_empirica}
+%      (ou cole o conteudo direto).
+%   4. Atualize a Subsecao 6.2 para citar os numeros desta secao
+%      (use \ref{tab:h1-percentis}, \ref{tab:h2-disponibilidade},
+%       \ref{tab:classificador-global} e \ref{fig:matriz-confusao}).
+% =====================================================================
+
+\subsection{Avaliacao Empirica das Hipoteses H1 e H2}
+\label{sec:avaliacao-empirica}
+
+Esta subsecao apresenta os resultados quantitativos obtidos com a Rodada~2
+de benchmarks, conduzida em ambiente local com o \texttt{docker compose}
+do Fyna (servicos \texttt{fyna-back} e \texttt{fyna-ai}). Os artefatos de
+execucao estao em \texttt{docs/benchmarks/} e os dados brutos em
+\texttt{resultados\_h1\_*.csv}, \texttt{resultados\_h2\_*.csv} e
+\texttt{resultados\_brutos.csv}.
+
+\paragraph{Ambiente de teste.}
+\begin{itemize}
+  \item Hardware: <PREENCHER: CPU/RAM/Disco do host>
+  \item SO: <PREENCHER: ex.: Windows 11 / Linux Ubuntu 22.04>
+  \item Containers: \texttt{fyna-backend} (Spring Boot 3.x), \texttt{fyna-ai-engine} (FastAPI), Postgres no host
+  \item Carga: Locust \texttt{<PREENCHER: versao>}, 25 usuarios virtuais, ramp-up 5 VUs/s, 3 minutos
+  \item Data da coleta: <PREENCHER: AAAA-MM-DD>
+\end{itemize}
+
+% =====================================================================
+\subsubsection{H1 — Latencia (p95 < 200 ms)}
+\label{sec:h1}
+
+A Tabela~\ref{tab:h1-percentis} sintetiza os percentis de latencia por
+endpoint, extraidos de \texttt{resultados\_h1\_stats.csv}.
+
+\begin{table}[!htb]
+  \centering
+  \caption{Percentis de latencia (ms) — 25 VUs, 3 min.}
+  \label{tab:h1-percentis}
+  \begin{tabular}{lrrrrr}
+    \hline
+    \textbf{Endpoint} & \textbf{p50} & \textbf{p95} & \textbf{p99} & \textbf{Req/s} & \textbf{Erros (\%)} \\
+    \hline
+    POST /api/v1/transactions    & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    GET  /api/v1/accounts        & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    GET  /api/v1/transactions/\{id\} & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    \hline
+    \textbf{Agregado}            & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\paragraph{Veredito H1.}
+<PREENCHER: APROVADO ou REPROVADO — escreva o p95 agregado e compare com 200~ms>.
+<PREENCHER: comentario curto sobre o endpoint mais lento, possiveis gargalos
+(p.\,ex., serializacao, indices, latencia do Postgres) e qualquer mitigacao
+ja adotada na implementacao>.
+
+% =====================================================================
+\subsubsection{H2 — Disponibilidade sob falha do microsservico de IA}
+\label{sec:h2}
+
+Para validar H2 foi injetada uma falha controlada parando o servico
+\texttt{fyna-ai} via \texttt{docker compose stop} por 120~s, com fases
+baseline e recuperacao de 60~s cada. Durante todo o periodo o backend
+recebeu requisicoes \texttt{POST /api/v1/transactions} sem
+\texttt{categoryId} (caminho que dispara classificacao \texttt{@Async} no
+\texttt{AIEngineClient}, sujeita ao circuit~breaker). A
+Tabela~\ref{tab:h2-disponibilidade} resume os resultados.
+
+\begin{table}[!htb]
+  \centering
+  \caption{Taxa de sucesso por fase do experimento H2.}
+  \label{tab:h2-disponibilidade}
+  \begin{tabular}{lrrr}
+    \hline
+    \textbf{Fase} & \textbf{Total req.} & \textbf{Sucesso (2xx)} & \textbf{Taxa (\%)} \\
+    \hline
+    Baseline (60 s, IA UP)             & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Falha injetada (120 s, IA DOWN)    & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Recuperacao (60 s, IA UP)          & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\paragraph{Veredito H2.}
+<PREENCHER: APROVADO ou REPROVADO — escreva a taxa de sucesso da fase de
+falha e compare com o limiar de 99\%>.
+<PREENCHER: comente sobre o impacto observado em
+\texttt{AIEngineClient.classifyTransaction} (chamada \texttt{@Async} + circuit~breaker:
+5 falhas / 60~s) e o fato de a transacao ser persistida antes do trigger
+do classificador, garantindo que falhas no \texttt{fyna-ai} nao propaguem
+para o usuario final>.
+
+% =====================================================================
+\subsubsection{Avaliacao do classificador supervisionado}
+\label{sec:classificador}
+
+Foram geradas \texttt{<PREENCHER: N>} transacoes sinteticas em PT-BR,
+distribuidas entre as categorias canonicas do Fyna. Cada transacao foi
+criada via \texttt{POST /api/v1/transactions} sem \texttt{categoryId} e a
+predicao do classificador foi coletada em
+\texttt{GET /api/v1/ai/classifications/transaction/\{id\}}.
+
+\begin{table}[!htb]
+  \centering
+  \caption{Metricas globais do classificador.}
+  \label{tab:classificador-global}
+  \begin{tabular}{lr}
+    \hline
+    \textbf{Metrica}        & \textbf{Valor} \\
+    \hline
+    Acuracia global         & <PREENCHER> \\
+    F1 (macro)              & <PREENCHER> \\
+    Precisao (macro)        & <PREENCHER> \\
+    Revocacao (macro)       & <PREENCHER> \\
+    Latencia p50 (ms)       & <PREENCHER> \\
+    Latencia p95 (ms)       & <PREENCHER> \\
+    Versao do modelo        & <PREENCHER> \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[!htb]
+  \centering
+  \caption{Metricas por categoria (extraido de
+  \texttt{metricas\_por\_categoria.csv}).}
+  \label{tab:classificador-por-categoria}
+  \begin{tabular}{lrrrr}
+    \hline
+    \textbf{Categoria} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Support} \\
+    \hline
+    Alimentação    & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Transporte     & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Mercado        & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Moradia        & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Saúde          & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Lazer          & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Educação       & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Salário        & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    Investimentos  & <PREENCHER> & <PREENCHER> & <PREENCHER> & <PREENCHER> \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{figure}[!htb]
+  \centering
+  \includegraphics[width=0.85\linewidth]{images/matriz_confusao.png}
+  \caption{Matriz de confusao normalizada por linha. A diagonal indica a
+  fracao de instancias da categoria real classificadas corretamente.}
+  \label{fig:matriz-confusao}
+\end{figure}
+
+\paragraph{Discussao.}
+<PREENCHER: discuta categorias com maior confusao mutua (p.\,ex.,
+"Alimentacao" vs "Mercado"), efeito do limiar de confianca configurado
+em \texttt{settings.classifier\_confidence\_threshold} e o impacto do
+aprendizado por correcoes (\texttt{was\_corrected=true}) descrito em
+\texttt{classifier.py}>.
+
+% =====================================================================
+\subsubsection{Sintese e implicacoes para H1 e H2}
+\label{sec:sintese-empirica}
+
+<PREENCHER: 1-2 paragrafos relacionando os resultados acima com as
+proposicoes do Capitulo~6. Indique se as evidencias coletadas sustentam
+ou nao H1 (latencia) e H2 (disponibilidade) e referencie as tabelas
+deste capitulo nas Subsecoes 6.2.1 e 6.2.2.>

@@ -1,0 +1,11 @@
+===== Sumario H2 =====
+CSV: resultados_h2_20260527_201101.csv
+
+[baseline]
+  total=43  sucesso=43  falha=0  taxa_sucesso=100.00%
+[failure]
+  total=87  sucesso=87  falha=0  taxa_sucesso=100.00%
+[recovery]
+  total=42  sucesso=42  falha=0  taxa_sucesso=100.00%
+
+Veredito H2 (foco em 'failure'): APROVADO (>=99% na fase de falha: 100.00%)
