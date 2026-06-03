@@ -54,13 +54,15 @@ export TX_ID=<UUID de uma transacao existente>
 Rode a partir desta pasta (`docs/benchmarks`):
 
 ```bash
-locust -f benchmark_carga_h1.py \
+python -m locust -f benchmark_carga_h1.py \
        --host $BASE_URL \
        --headless \
        --users 25 --spawn-rate 5 \
        --run-time 3m \
        --csv resultados_h1 --html relatorio_h1.html
 ```
+
+Se `locust` nao estiver disponivel no PATH do PowerShell, use `python -m locust` como acima.
 
 Saidas:
 - `resultados_h1_stats.csv` — percentis por endpoint (coluna `95%` = p95)

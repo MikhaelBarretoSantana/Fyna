@@ -16,7 +16,7 @@ Pre-requisitos (variaveis de ambiente):
 - TX_ID        UUID de uma transacao existente (usado no GET /{id})
 
 Execucao headless (recomendada para coletar CSV):
-    locust -f benchmark_carga_h1.py \
+    python -m locust -f benchmark_carga_h1.py \
            --host $BASE_URL \
            --headless \
            --users 25 --spawn-rate 5 \
