@@ -26,6 +26,9 @@ fyna/
   (criar database `fyna_db` com usuário `postgres`)
 - Flutter SDK (apenas para desenvolvimento mobile)
 
+> Redis 7 sobe via docker-compose como serviço `fyna-redis` — não precisa
+> instalar nada na máquina host.
+
 ### Setup inicial
 
 1. Clone o repositório:
@@ -42,14 +45,18 @@ cp .env.example .env
 # edite .env e troque os valores de senhas/chaves
 ```
 
-3. Suba os serviços backend (Spring Boot + IA):
+3. Suba os serviços backend (Spring Boot + IA + Redis):
 
 ```bash
 docker compose up -d --build
 ```
 
-A API ficará disponível em `http://localhost:8080`
-e a IA em `http://localhost:8081`.
+| Serviço     | Porta | Descrição                                    |
+|-------------|-------|----------------------------------------------|
+| `fyna-back` | 8080  | API Spring Boot                              |
+| `fyna-ai`   | 8081  | Microserviço de IA (FastAPI)                 |
+| `fyna-redis`| 6379  | Cache distribuído (categorias)               |
+| `fyna-ngrok`| 4040  | Túnel público (UI de inspeção)               |
 
 4. Rode o app Flutter:
 
@@ -61,13 +68,15 @@ flutter run
 
 ## 🔧 Stack
 
-| Camada    | Tecnologia                                       |
-|-----------|--------------------------------------------------|
-| Mobile    | Flutter 3.9 (Dart, Dio, fl_chart, local_auth)    |
-| Backend   | Spring Boot 4 (Java 21, Gradle, JPA, JWT, Flyway)|
-| IA        | FastAPI + sentence-transformers + scikit-learn   |
-| Banco     | PostgreSQL 16                                    |
-| Auth      | JWT com rotação de refresh token + biometria     |
+| Camada      | Tecnologia                                              |
+|-------------|---------------------------------------------------------|
+| Mobile      | Flutter 3.9 (Dart, Dio, fl_chart, local_auth)           |
+| Backend     | Spring Boot 4 (Java 21, Gradle, JPA, JWT, Flyway)       |
+| IA          | FastAPI + sentence-transformers + scikit-learn          |
+| Banco       | PostgreSQL 16                                           |
+| Cache       | Redis 7 (Spring Cache, JSON com type wrapper)           |
+| Resiliência | Spring Retry (backoff exponencial) + circuit breaker    |
+| Auth        | JWT com rotação de refresh token + biometria            |
 
 ## 🔑 Features principais
 
@@ -78,6 +87,12 @@ flutter run
 - ✅ Predição de gastos e detecção de padrões
 - ✅ Orçamentos, metas, transações recorrentes
 - ✅ Multi-conta, multi-moeda
+- ✅ **Cache distribuído** das categorias do sistema (Redis, TTL 1h)
+- ✅ **Resiliência ao microserviço de IA** — retry com backoff exponencial
+  (3 tentativas, 500ms→1s→2s) e circuit breaker (abre após 5 falhas, half-open em 60s)
+- ✅ **Portabilidade de dados pessoais (LGPD art. 18, V)** via
+  `GET /api/v1/users/me/export` — devolve JSON estruturado com perfil,
+  preferências, contas, categorias, transações, orçamentos e metas do titular
 
 ## 📂 Documentação adicional
 

@@ -2,6 +2,21 @@ name: fyna
 
 services:
 
+  # ── Redis (cache de categorias do sistema) ───────────────────
+  fyna-redis:
+    image: redis:7-alpine
+    container_name: fyna-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    command: ["redis-server", "--save", "60", "1", "--loglevel", "warning"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    volumes:
+      - fyna-redis-data:/data
+
   # ── Python AI Microservice ───────────────────────────────────
   fyna-ai:
     build:
@@ -32,6 +47,8 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: fyna-redis
+      REDIS_PORT: 6379
       FYNA_AI_ENGINE_URL: http://fyna-ai:8081
       FYNA_AI_INTERNAL_KEY: ${FYNA_INTERNAL_KEY}
       FYNA_CORS_ORIGINS: ${FYNA_CORS_ORIGINS}
@@ -41,6 +58,8 @@ services:
     depends_on:
       fyna-ai:
         condition: service_started
+      fyna-redis:
+        condition: service_healthy
 
   # ── ngrok Tunnel (expõe fyna-back para internet) ─────────────
   fyna-ngrok:
@@ -54,3 +73,6 @@ services:
     depends_on:
       fyna-back:
         condition: service_started
+
+volumes:
+  fyna-redis-data:

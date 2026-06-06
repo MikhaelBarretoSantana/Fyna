@@ -19,8 +19,14 @@ import org.springframework.web.client.RestTemplate;
  * REST client that communicates with the Python AI microservice (fyna-ai-engine).
  *
  * All calls are fire-and-forget (@Async) so they never block the main request.
- * Built-in circuit breaker: após N falhas consecutivas, abre o circuito por
- * `circuitOpenSeconds` segundos antes de tentar novamente (half-open).
+ *
+ * Pilha de resiliencia aplicada a cada chamada (de fora para dentro):
+ *   1. @Async                 — despacha em thread separada do executor.
+ *   2. Circuit breaker        — interrompe chamadas apos N falhas consecutivas.
+ *   3. Retry com backoff exp. — delegado ao AIEngineRestCaller (Spring Retry).
+ *
+ * Quando o retry esgota suas 3 tentativas, a exceção propaga, o circuit breaker
+ * incrementa o contador e — atingido o limiar — o circuito abre.
  *
  * Configuração (application.yml):
  *   fyna.ai.circuit-breaker.failure-threshold=5
@@ -32,6 +38,7 @@ public class AIEngineClient {
     private static final Logger log = LoggerFactory.getLogger(AIEngineClient.class);
 
     private final RestTemplate restTemplate;
+    private final AIEngineRestCaller restCaller;
     private final AIEngineConfig config;
 
     @Value("${fyna.ai.circuit-breaker.failure-threshold:5}")
@@ -44,8 +51,11 @@ public class AIEngineClient {
     private final AtomicInteger consecutiveFailures = new AtomicInteger(0);
     private final AtomicReference<Instant> openedAt = new AtomicReference<>(null);
 
-    public AIEngineClient(RestTemplate aiRestTemplate, AIEngineConfig config) {
+    public AIEngineClient(RestTemplate aiRestTemplate,
+                          AIEngineRestCaller restCaller,
+                          AIEngineConfig config) {
         this.restTemplate = aiRestTemplate;
+        this.restCaller = restCaller;
         this.config = config;
     }
 
@@ -63,7 +73,7 @@ public class AIEngineClient {
                 "amount", amount,
                 "transaction_type", transactionType
             );
-            restTemplate.postForEntity(url, body, Map.class);
+            restCaller.post(url, body);
             onSuccess();
             log.info("Classification requested for transaction {}", transactionId);
         } catch (Exception e) {
@@ -77,7 +87,7 @@ public class AIEngineClient {
 
         try {
             String url = config.getEngineUrl() + "/api/v1/ai-engine/analyze";
-            restTemplate.postForEntity(url, Map.of("user_id", userId.toString()), Map.class);
+            restCaller.post(url, Map.of("user_id", userId.toString()));
             onSuccess();
             log.info("Full analysis requested for user {}", userId);
         } catch (Exception e) {
@@ -95,7 +105,7 @@ public class AIEngineClient {
                 "user_id", userId.toString(),
                 "target_month", targetMonth.toString()
             );
-            restTemplate.postForEntity(url, body, Map.class);
+            restCaller.post(url, body);
             onSuccess();
             log.info("Prediction requested for user {} month {}", userId, targetMonth);
         } catch (Exception e) {
@@ -109,7 +119,7 @@ public class AIEngineClient {
 
         try {
             String url = config.getEngineUrl() + "/api/v1/ai-engine/recommend";
-            restTemplate.postForEntity(url, Map.of("user_id", userId.toString()), Map.class);
+            restCaller.post(url, Map.of("user_id", userId.toString()));
             onSuccess();
             log.info("Recommendations requested for user {}", userId);
         } catch (Exception e) {
